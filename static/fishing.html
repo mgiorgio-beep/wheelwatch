@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wheelhouse — Red Nun Dashboard</title>
+<link rel="stylesheet" href="/static/sidebar.css">
+<style>
+:root {
+  --bg-primary: #0a0f1a;
+  --bg-card: #0d1520;
+  --bg-card-hover: #111b28;
+  --border: #1a2535;
+  --border-light: #223040;
+  --text-primary: #e0e8f0;
+  --text-secondary: #7a8a9a;
+  --text-muted: #4a5a6a;
+  --accent: #00d4ff;
+  --accent-dim: #00d4ff30;
+  --green: #00e676;
+  --red: #ff4444;
+  --orange: #ff9800;
+  --blue: #448aff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+.fi-wrap {
+  margin-left: 220px;
+  padding: 20px;
+  max-width: 1200px;
+}
+@media(max-width:768px) {
+  .fi-wrap { margin-left: 0; padding: 12px; }
+}
+
+/* Header */
+.fi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.fi-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.fi-header h1 span { color: var(--accent); }
+.fi-refresh {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+.fi-refresh:hover { background: var(--accent-dim); border-color: var(--accent); }
+.fi-refresh:disabled { opacity: .4; cursor: wait; }
+.fi-timestamp {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Grid */
+.fi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media(max-width:900px) {
+  .fi-grid { grid-template-columns: 1fr; }
+}
+.fi-full { grid-column: 1 / -1; }
+
+/* Cards */
+.fi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.fi-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.fi-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fi-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.fi-badge-live { background: var(--accent-dim); color: var(--accent); border: 1px solid #00d4ff40; }
+.fi-badge-ext { background: #ff980020; color: var(--orange); border: 1px solid #ff980040; }
+.fi-badge-err { background: #ff444420; color: var(--red); border: 1px solid #ff444440; }
+
+.fi-card-body { padding: 12px 16px 16px; }
+
+/* Accent bar at top of card */
+.fi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+}
+.fi-card.green::before { background: linear-gradient(90deg, transparent, #00e67640, transparent); }
+.fi-card.orange::before { background: linear-gradient(90deg, transparent, #ff980040, transparent); }
+.fi-card.blue::before { background: linear-gradient(90deg, transparent, #448aff40, transparent); }
+
+/* Data rows */
+.fi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid #080d16;
+}
+.fi-row:last-child { border-bottom: none; }
+.fi-row-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.fi-row-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fi-row-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.fi-high { color: var(--accent); }
+.fi-low { color: var(--blue); }
+.fi-flood { color: var(--green); }
+.fi-ebb { color: var(--red); }
+.fi-slack { color: var(--orange); }
+
+/* Source links */
+.fi-source {
+  display: block;
+  padding: 10px 14px;
+  margin: 6px 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all .2s;
+}
+.fi-source:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.fi-source-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.fi-source-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.fi-source-arrow {
+  float: right;
+  color: var(--text-muted);
+  font-size: 16px;
+  margin-top: -2px;
+}
+
+/* Weather grid */
+.fi-wx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+}
+.fi-wx-hour {
+  background: var(--bg-primary);
+  border-radius: 4px;
+  padding: 8px 6px;
+  text-align: center;
+  border: 1px solid #080d16;
+}
+.fi-wx-time { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+.fi-wx-temp { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.fi-wx-wind { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+.fi-wx-short { font-size: 9px; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Tide chart */
+.fi-tide-chart {
+  width: 100%;
+  height: 140px;
+  position: relative;
+}
+.fi-tide-chart canvas { width: 100%; height: 100%; }
+
+/* Forecast cards */
+.fi-forecast {
+  padding: 10px 14px;
+  margin: 6px 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.fi-forecast-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.fi-forecast-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Buoy */
+.fi-buoy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.fi-buoy-item {
+  background: var(--bg-primary);
+  border-radius: 4px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid #080d16;
+}
+.fi-buoy-val { font-size: 20px; font-weight: 700; color: var(--accent); }
+.fi-buoy-label { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.5px; }
+
+/* Loading */
+.fi-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.fi-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: fispin 1s linear infinite;
+}
+@keyframes fispin { to { transform: rotate(360deg); } }
+
+/* Current time marker */
+.fi-now {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #00e67620;
+  color: var(--green);
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div class="fi-wrap" id="fi-app">
+
+  <!-- CAPTAIN'S ADVISOR CHAT -->
+  <div class="fi-card" style="margin-bottom:20px;border-color:#00d4ff30;">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#00d4ff60,transparent);"></div>
+    <div class="fi-card-header">
+      <div class="fi-card-title">🧠 Wheelhouse Advisor</div>
+      <span class="fi-badge fi-badge-live">AI</span>
+    </div>
+    <div class="fi-card-body">
+      <div id="advisor-chat" style="max-height:400px;overflow-y:auto;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input id="advisor-input" type="text"
+          placeholder="Leaving Ryder's Cove tomorrow at 12 PM..."
+          style="flex:1;background:#080d16;border:1px solid #1a2535;border-radius:4px;padding:10px 14px;
+                 color:#e0e8f0;font-family:inherit;font-size:13px;outline:none;"
+          onkeydown="if(event.key==='Enter')advisorSend()"
+        >
+        <button onclick="advisorSend()"
+          style="background:#00d4ff15;border:1px solid #00d4ff40;color:#00d4ff;padding:10px 18px;
+                 border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;
+                 letter-spacing:1px;white-space:nowrap;">
+          SEND
+        </button>
+      </div>
+      <div style="font-size:10px;color:#4a5a6a;margin-top:6px;">
+        Tell me when you're leaving, and I'll analyze live tides, currents, weather, SST and give you a game plan.
+      </div>
+    </div>
+  </div>
+
+  <div class="fi-header">
+    <div>
+      <h1>⚓ WHEEL<span>HOUSE</span></h1>
+      <div class="fi-timestamp" id="fi-ts">Loading...</div>
+    </div>
+    <button class="fi-refresh" id="fi-refresh-btn" onclick="fiLoad()">↻ Refresh</button>
+  </div>
+
+  <div class="fi-grid" id="fi-content">
+    <div class="fi-full">
+      <div class="fi-loading"><div class="fi-spinner"></div> ACQUIRING DATA FROM NOAA...</div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/sidebar.js"></script>
+<script>
+(function(){
+'use strict';
+
+// ==================== HELPERS ====================
+function fmtTime(s) {
+  try {
+    // NOAA returns "2026-04-03 14:30"
+    var d = s.includes('T') ? new Date(s) : new Date(s.replace(' ', 'T'));
+    return d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+  } catch(e) { return s; }
+}
+function fmtDay(s) {
+  try {
+    var d = s.includes('T') ? new Date(s) : new Date(s.replace(' ', 'T'));
+    return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  } catch(e) { return s; }
+}
+function fmtDayShort(s) {
+  try {
+    var d = new Date(s);
+    return d.toLocaleDateString('en-US', {weekday:'short'});
+  } catch(e) { return s; }
+}
+function parseFloat2(v) {
+  var n = parseFloat(v);
+  return isNaN(n) ? v : n.toFixed(1);
+}
+function isUpcoming(s) {
+  try {
+    var d = s.includes('T') ? new Date(s) : new Date(s.replace(' ', 'T'));
+    return d > new Date();
+  } catch(e) { return true; }
+}
+
+// ==================== RENDER ====================
+function renderBriefing(data) {
+  var html = '';
+
+  // ---- BUOY CARD (top, full width) ----
+  html += renderBuoy(data.buoy);
+
+  // ---- TIDES ----
+  html += renderTides(data.tides);
+
+  // ---- CURRENTS ----
+  html += renderCurrents(data.currents);
+
+  // ---- WEATHER HOURLY ----
+  html += renderWeatherHourly(data.weather);
+
+  // ---- FORECAST ----
+  html += renderForecast(data.weather);
+
+  // ---- TIDE CHART ----
+  html += renderTideChartCard(data.tide_chart);
+
+  // ---- SST SOURCES ----
+  html += renderSources('SST — Sea Surface Temp', '🛰️', data.sst, 'orange');
+
+  // ---- SATELLITE IMAGERY (EMBEDDED) ----
+  html += renderSatelliteViewer();
+
+  // ---- VISUAL SATELLITE LINKS ----
+  html += renderSources('Visual Satellite — Open In New Tab', '📸', data.visual, '');
+
+  // ---- CHLOROPHYLL ----
+  html += renderSources('Chlorophyll — Bait Finder', '🧬', data.chlorophyll, 'green');
+
+  document.getElementById('fi-content').innerHTML = html;
+  document.getElementById('fi-ts').textContent = 'Updated: ' + new Date().toLocaleString();
+
+  // Draw tide chart after DOM update
+  if (data.tide_chart && data.tide_chart.predictions) {
+    setTimeout(function() { drawTideChart(data.tide_chart); }, 100);
+  }
+}
+
+// ---- BUOY ----
+function renderBuoy(buoy) {
+  if (!buoy || !buoy.observation) return '';
+  var obs = buoy.observation;
+  var waveHt = obs.WVHT ? parseFloat2(obs.WVHT) + ' ft' : '--';
+  var wavePd = obs.DPD ? parseFloat2(obs.DPD) + 's' : '--';
+  var waterTemp = obs.WTMP ? (parseFloat(obs.WTMP) * 9/5 + 32).toFixed(1) + '°F' : '--';
+  var windSpd = obs.WSPD ? (parseFloat(obs.WSPD) * 1.944).toFixed(0) + ' kt' : '--';
+  var windGust = obs.GST ? (parseFloat(obs.GST) * 1.944).toFixed(0) + ' kt' : '--';
+  var windDir = obs.WDIR || '--';
+
+  return '<div class="fi-card blue fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">🔵 Buoy 44018 — SE Cape Cod</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body"><div class="fi-buoy-grid">' +
+    buoyItem(waterTemp, 'WATER TEMP') +
+    buoyItem(waveHt, 'WAVE HEIGHT') +
+    buoyItem(wavePd, 'WAVE PERIOD') +
+    buoyItem(windSpd, 'WIND SPEED') +
+    buoyItem(windGust, 'GUST') +
+    buoyItem(windDir + '°', 'WIND DIR') +
+    '</div></div></div>';
+}
+function buoyItem(val, label) {
+  return '<div class="fi-buoy-item"><div class="fi-buoy-val">' + val + '</div><div class="fi-buoy-label">' + label + '</div></div>';
+}
+
+// ---- TIDES ----
+function renderTides(tides) {
+  var html = '';
+  for (var key in tides) {
+    var t = tides[key];
+    if (!t || !t.predictions) continue;
+    var upcoming = t.predictions.filter(function(p) { return isUpcoming(p.t); }).slice(0, 8);
+    html += '<div class="fi-card"><div class="fi-card-header">' +
+      '<div class="fi-card-title">🌊 Tides — ' + t.station.name + '</div>' +
+      '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+      '<div class="fi-card-body">';
+    upcoming.forEach(function(p) {
+      var isH = p.type === 'H';
+      var cls = isH ? 'fi-high' : 'fi-low';
+      var label = fmtDay(p.t) + ' · ' + fmtTime(p.t);
+      var val = parseFloat2(p.v) + ' ft';
+      var tag = isH ? '▲ HIGH' : '▼ LOW';
+      html += '<div class="fi-row"><span class="fi-row-label">' + label + '</span>' +
+        '<div><span class="fi-row-value ' + cls + '">' + val + '</span>' +
+        '<div class="fi-row-sub">' + tag + '</div></div></div>';
+    });
+    html += '</div></div>';
+  }
+  return html;
+}
+
+// ---- CURRENTS ----
+function renderCurrents(currents) {
+  var html = '';
+  for (var key in currents) {
+    var c = currents[key];
+    if (!c || !c.predictions) continue;
+    var upcoming = c.predictions.filter(function(p) { return isUpcoming(p.Time); }).slice(0, 10);
+    html += '<div class="fi-card green"><div class="fi-card-header">' +
+      '<div class="fi-card-title">⚡ Currents — ' + c.station.name + '</div>' +
+      '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+      '<div class="fi-card-body">';
+    upcoming.forEach(function(p) {
+      var type = p.Type || '';
+      var cls = 'fi-slack';
+      var tag = 'SLACK';
+      if (type === 'flood') { cls = 'fi-flood'; tag = '↗ FLOOD'; }
+      else if (type === 'ebb') { cls = 'fi-ebb'; tag = '↙ EBB'; }
+      var vel = p.Velocity_Major ? parseFloat2(p.Velocity_Major) + ' kt' : 'slack';
+      var label = fmtDay(p.Time) + ' · ' + fmtTime(p.Time);
+      html += '<div class="fi-row"><span class="fi-row-label">' + label + '</span>' +
+        '<div><span class="fi-row-value ' + cls + '">' + vel + '</span>' +
+        '<div class="fi-row-sub">' + tag + '</div></div></div>';
+    });
+    html += '</div></div>';
+  }
+  return html;
+}
+
+// ---- WEATHER HOURLY ----
+function renderWeatherHourly(weather) {
+  if (!weather || !weather.hourly) return '';
+  var hours = weather.hourly.slice(0, 12);
+  var html = '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">🌤️ Hourly Forecast — Chatham</div>' +
+    '<span class="fi-badge fi-badge-live">NWS</span></div>' +
+    '<div class="fi-card-body"><div class="fi-wx-grid">';
+  hours.forEach(function(h) {
+    var t = new Date(h.startTime);
+    var time = t.toLocaleTimeString('en-US', {hour:'numeric'});
+    var wind = h.windSpeed || '';
+    var dir = h.windDirection || '';
+    html += '<div class="fi-wx-hour"><div class="fi-wx-time">' + time + '</div>' +
+      '<div class="fi-wx-temp">' + h.temperature + '°</div>' +
+      '<div class="fi-wx-wind">' + dir + ' ' + wind + '</div>' +
+      '<div class="fi-wx-short">' + (h.shortForecast || '') + '</div></div>';
+  });
+  html += '</div></div></div>';
+  return html;
+}
+
+// ---- FORECAST ----
+function renderForecast(weather) {
+  if (!weather || !weather.forecast) return '';
+  var html = '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">📋 Extended Forecast</div>' +
+    '<span class="fi-badge fi-badge-live">NWS</span></div>' +
+    '<div class="fi-card-body">';
+  weather.forecast.forEach(function(p) {
+    html += '<div class="fi-forecast"><div class="fi-forecast-name">' + p.name +
+      ' — ' + p.temperature + '°' + p.temperatureUnit +
+      ' · Wind ' + (p.windDirection || '') + ' ' + (p.windSpeed || '') + '</div>' +
+      '<div class="fi-forecast-detail">' + (p.detailedForecast || p.shortForecast || '') + '</div></div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ---- TIDE CHART ----
+function renderTideChartCard(tideChart) {
+  if (!tideChart) return '';
+  return '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">📈 48-Hour Tide Curve — Chatham</div>' +
+    '<span class="fi-badge fi-badge-live">NOAA</span></div>' +
+    '<div class="fi-card-body"><div class="fi-tide-chart"><canvas id="fi-tide-canvas"></canvas></div></div></div>';
+}
+
+function drawTideChart(tideData) {
+  var canvas = document.getElementById('fi-tide-canvas');
+  if (!canvas || !tideData || !tideData.predictions) return;
+  var ctx = canvas.getContext('2d');
+  var preds = tideData.predictions;
+  if (preds.length < 2) return;
+
+  // Responsive sizing
+  var rect = canvas.parentElement.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+
+  var W = rect.width, H = rect.height;
+  var pad = {top: 10, right: 10, bottom: 24, left: 36};
+  var cW = W - pad.left - pad.right;
+  var cH = H - pad.top - pad.bottom;
+
+  // Parse data - sample every 10th point for performance
+  var points = [];
+  for (var i = 0; i < preds.length; i += 5) {
+    var p = preds[i];
+    var d = new Date(p.t.replace(' ', 'T'));
+    points.push({time: d.getTime(), val: parseFloat(p.v)});
+  }
+
+  var tMin = points[0].time, tMax = points[points.length-1].time;
+  var vMin = Infinity, vMax = -Infinity;
+  points.forEach(function(p) {
+    if (p.val < vMin) vMin = p.val;
+    if (p.val > vMax) vMax = p.val;
+  });
+  var vPad = (vMax - vMin) * 0.15;
+  vMin -= vPad; vMax += vPad;
+
+  function tx(t) { return pad.left + (t - tMin) / (tMax - tMin) * cW; }
+  function ty(v) { return pad.top + cH - (v - vMin) / (vMax - vMin) * cH; }
+
+  // Background
+  ctx.fillStyle = '#080d16';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = '#1a2535';
+  ctx.lineWidth = 0.5;
+  for (var v = Math.ceil(vMin); v <= Math.floor(vMax); v++) {
+    var y = ty(v);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W-pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#4a5a6a'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(v + 'ft', pad.left - 4, y + 3);
+  }
+
+  // Time labels (every 6 hours)
+  var sixHr = 6 * 3600 * 1000;
+  var startHr = new Date(tMin);
+  startHr.setMinutes(0, 0, 0);
+  startHr.setHours(Math.ceil(startHr.getHours() / 6) * 6);
+  for (var tt = startHr.getTime(); tt < tMax; tt += sixHr) {
+    var xx = tx(tt);
+    ctx.strokeStyle = '#1a2535'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(xx, pad.top); ctx.lineTo(xx, H-pad.bottom); ctx.stroke();
+    var dd = new Date(tt);
+    ctx.fillStyle = '#4a5a6a'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(dd.toLocaleTimeString('en-US', {hour:'numeric', hour12:true}), xx, H - 6);
+  }
+
+  // Tide curve
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach(function(p, idx) {
+    var x = tx(p.time), y = ty(p.val);
+    if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill under curve
+  var grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+  grad.addColorStop(0, '#00d4ff20');
+  grad.addColorStop(1, '#00d4ff02');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  points.forEach(function(p, idx) {
+    var x = tx(p.time), y = ty(p.val);
+    if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(tx(points[points.length-1].time), H - pad.bottom);
+  ctx.lineTo(tx(points[0].time), H - pad.bottom);
+  ctx.closePath();
+  ctx.fill();
+
+  // NOW marker
+  var now = Date.now();
+  if (now >= tMin && now <= tMax) {
+    var nx = tx(now);
+    ctx.strokeStyle = '#00e676';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(nx, pad.top); ctx.lineTo(nx, H - pad.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#00e676'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('NOW', nx, pad.top - 2);
+  }
+}
+
+// ---- SOURCES (SST / Chlorophyll) ----
+function renderSources(title, icon, data, cardClass) {
+
+// ---- SATELLITE IMAGE VIEWER ----
+function renderSatelliteViewer() {
+  return '<div class="fi-card fi-full" id="fi-sat-card"><div class="fi-card-header">' +
+    '<div class="fi-card-title">📸 Satellite Imagery — NASA GIBS</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body">' +
+    '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
+    satBtn('truecolor', 'True Color') +
+    satBtn('truecolor_aqua', 'Aqua MODIS') +
+    satBtn('chlorophyll', 'Chlorophyll') +
+    satBtn('sst', 'SST') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+    satViewBtn('chatham', 'Chatham / Monomoy') +
+    satViewBtn('capecod', 'Wide Cape Cod') +
+    '</div>' +
+    '<div id="fi-sat-img-wrap" style="position:relative;width:100%;min-height:200px;background:#080d16;border-radius:4px;overflow:hidden;border:1px solid #1a2535;">' +
+    '<div class="fi-loading" style="padding:20px;"><div class="fi-spinner"></div> Loading satellite image...</div>' +
+    '</div>' +
+    '<div id="fi-sat-meta" style="font-size:10px;color:#4a5a6a;margin-top:6px;"></div>' +
+    '</div></div>';
+}
+function satBtn(layer, label) {
+  return '<button onclick="fiLoadSat(\'' + layer + '\')" class="fi-sat-btn" data-layer="' + layer + '" style="' +
+    'background:#0a0f1a;border:1px solid #1a2535;color:#7a8a9a;padding:6px 12px;border-radius:3px;' +
+    'font-family:inherit;font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:0.5px;' +
+    '">' + label + '</button>';
+}
+function satViewBtn(view, label) {
+  return '<button onclick="fiLoadSatView(\'' + view + '\')" class="fi-sat-view-btn" data-view="' + view + '" style="' +
+    'background:#0a0f1a;border:1px solid #1a2535;color:#7a8a9a;padding:5px 10px;border-radius:3px;' +
+    'font-family:inherit;font-size:10px;cursor:pointer;transition:all .2s;' +
+    '">' + label + '</button>';
+}
+
+var currentSatLayer = 'truecolor';
+var currentSatView = 'chatham';
+
+window.fiLoadSat = function(layer) {
+  currentSatLayer = layer || currentSatLayer;
+  loadSatImage();
+};
+window.fiLoadSatView = function(view) {
+  currentSatView = view || currentSatView;
+  loadSatImage();
+};
+
+function loadSatImage() {
+  var wrap = document.getElementById('fi-sat-img-wrap');
+  var meta = document.getElementById('fi-sat-meta');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="fi-loading" style="padding:20px;"><div class="fi-spinner"></div> Loading ' + currentSatLayer + '...</div>';
+
+  // Highlight active buttons
+  document.querySelectorAll('.fi-sat-btn').forEach(function(b) {
+    var isActive = b.getAttribute('data-layer') === currentSatLayer;
+    b.style.borderColor = isActive ? '#00d4ff' : '#1a2535';
+    b.style.color = isActive ? '#00d4ff' : '#7a8a9a';
+    b.style.background = isActive ? '#00d4ff15' : '#0a0f1a';
+  });
+  document.querySelectorAll('.fi-sat-view-btn').forEach(function(b) {
+    var isActive = b.getAttribute('data-view') === currentSatView;
+    b.style.borderColor = isActive ? '#00d4ff' : '#1a2535';
+    b.style.color = isActive ? '#00d4ff' : '#7a8a9a';
+  });
+
+  fetch('/api/fishing/satellite?layer=' + currentSatLayer + '&view=' + currentSatView)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      var img = '<img src="data:' + data.content_type + ';base64,' + data.image + '" ' +
+        'style="width:100%;height:auto;display:block;border-radius:4px;" ' +
+        'alt="' + data.layer + '">';
+      wrap.innerHTML = img;
+      if (meta) meta.textContent = data.layer + ' · ' + data.date + ' · NASA GIBS';
+    })
+    .catch(function(err) {
+      wrap.innerHTML = '<div style="padding:20px;color:#ff4444;font-size:12px;">⚠ ' + err.message +
+        '<br><span style="color:#4a5a6a;font-size:10px;">Image may not be available yet today. Try Aqua MODIS or check back later.</span></div>';
+    });
+}
+
+// Auto-load satellite after briefing loads
+setTimeout(function() { if (document.getElementById('fi-sat-img-wrap')) loadSatImage(); }, 2000);
+
+function renderSources(title, icon, data, cardClass) {
+  if (!data || !data.sources) return '';
+  var html = '<div class="fi-card ' + (cardClass||'') + '"><div class="fi-card-header">' +
+    '<div class="fi-card-title">' + icon + ' ' + title + '</div>' +
+    '<span class="fi-badge fi-badge-ext">EXT LINKS</span></div>' +
+    '<div class="fi-card-body">';
+  data.sources.forEach(function(s) {
+    html += '<a class="fi-source" href="' + s.url + '" target="_blank" rel="noopener">' +
+      '<span class="fi-source-arrow">→</span>' +
+      '<div class="fi-source-name">' + s.name + '</div>' +
+      '<div class="fi-source-desc">' + s.desc + '</div></a>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ==================== LOAD ====================
+var loading = false;
+window.fiLoad = function() {
+  if (loading) return;
+  loading = true;
+  var btn = document.getElementById('fi-refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '↻ Loading...';
+  document.getElementById('fi-content').innerHTML =
+    '<div class="fi-full"><div class="fi-loading"><div class="fi-spinner"></div> ACQUIRING DATA FROM NOAA, NWS, NDBC...</div></div>';
+
+  fetch('/api/fishing/briefing')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      renderBriefing(data);
+      loading = false;
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh';
+    })
+    .catch(function(err) {
+      document.getElementById('fi-content').innerHTML =
+        '<div class="fi-full"><div class="fi-card"><div class="fi-card-body">' +
+        '<div style="color:var(--red);font-size:13px;">⚠ Error loading briefing: ' + err.message + '</div>' +
+        '<div style="color:var(--text-muted);font-size:11px;margin-top:8px;">Check server logs: journalctl -u rednun -n 20</div>' +
+        '</div></div></div>';
+      loading = false;
+      btn.disabled = false;
+      btn.textContent = '↻ Retry';
+    });
+};
+
+// Auto-load on page ready
+fiLoad();
+
+// Auto-refresh every 15 minutes
+setInterval(fiLoad, 15 * 60 * 1000);
+
+// ==================== CAPTAIN'S ADVISOR ====================
+var advisorHistory = [];
+var advisorBusy = false;
+
+function advisorAddMsg(role, text) {
+  var chat = document.getElementById('advisor-chat');
+  if (!chat) return;
+  var div = document.createElement('div');
+  div.style.cssText = 'margin:8px 0;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;';
+  if (role === 'user') {
+    div.style.background = '#00d4ff10';
+    div.style.borderLeft = '3px solid #00d4ff';
+    div.style.color = '#c0d0e0';
+  } else {
+    div.style.background = '#0a1520';
+    div.style.borderLeft = '3px solid #00e676';
+    div.style.color = '#e0e8f0';
+  }
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function advisorAddLoading() {
+  var chat = document.getElementById('advisor-chat');
+  if (!chat) return;
+  var div = document.createElement('div');
+  div.id = 'advisor-loading';
+  div.style.cssText = 'margin:8px 0;padding:10px 14px;';
+  div.innerHTML = '<div class="fi-loading"><div class="fi-spinner"></div> Analyzing conditions...</div>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function advisorRemoveLoading() {
+  var el = document.getElementById('advisor-loading');
+  if (el) el.remove();
+}
+
+window.advisorSend = function() {
+  if (advisorBusy) return;
+  var input = document.getElementById('advisor-input');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  advisorAddMsg('user', msg);
+  advisorAddLoading();
+  advisorBusy = true;
+
+  fetch('/api/fishing/advisor', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      message: msg,
+      history: advisorHistory
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    advisorRemoveLoading();
+    if (data.error) {
+      advisorAddMsg('assistant', '⚠ ' + data.error);
+    } else {
+      advisorAddMsg('assistant', data.response);
+      advisorHistory.push({role: 'user', content: msg});
+      advisorHistory.push({role: 'assistant', content: data.response});
+      // Keep history manageable
+      if (advisorHistory.length > 20) advisorHistory = advisorHistory.slice(-16);
+    }
+    advisorBusy = false;
+  })
+  .catch(function(err) {
+    advisorRemoveLoading();
+    advisorAddMsg('assistant', '⚠ Connection error: ' + err.message);
+    advisorBusy = false;
+  });
+};
+
+// Redraw chart on resize
+window.addEventListener('resize', function() {
+  var canvas = document.getElementById('fi-tide-canvas');
+  if (canvas && window._lastTideData) drawTideChart(window._lastTideData);
+});
+
+})();
+</script>
+</body>
+</html>
