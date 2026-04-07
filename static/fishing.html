@@ -1041,7 +1041,6 @@ body {
     <div class="catch-gps" id="catch-gps-status">Getting location...</div>
 
     <button class="catch-save" id="catch-save-btn" onclick="catchSave()">Save Catch</button>
-    <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px;">Your catch data makes the AI Advisor smarter — the more you log, the better your plans get.</div>
   </div>
 </div>
 
@@ -1201,7 +1200,7 @@ function renderBriefing(data) {
   html += detailView('fi-sec-info', 'About',
     '<div class="fi-card fi-full"><div class="fi-card-header">' +
     '<div class="fi-card-title">⚓ Wheelhouse</div>' +
-    '<span class="fi-badge fi-badge-live">v2.0</span></div>' +
+    '<span class="fi-badge fi-badge-live">v1.01</span></div>' +
     '<div class="fi-card-body">' +
     '<div style="font-size:13px;line-height:1.7;color:var(--text-primary);">' +
     '<p><strong>How to use Wheelhouse:</strong></p>' +
@@ -1212,6 +1211,7 @@ function renderBriefing(data) {
     '<li>Tap <strong>🐟 Log Catch</strong> while on the water to save your spot, species, bait, and GPS. Conditions are automatically captured.</li>' +
     '<li>Your chat with the Advisor stays open — close it and reopen anytime to reference or update your plan mid-trip.</li>' +
     '</ul>' +
+    '<p style="margin-top:12px;"><strong>Catch Logging:</strong> Every catch you log — species, bait, spot, GPS, and conditions — feeds back into the AI Advisor. The more you log, the smarter your future plans get.</p>' +
     '<p style="margin-top:12px;color:var(--text-secondary);font-size:12px;">Data: NOAA, NWS, NDBC, NASA, Windfinder · AI: Anthropic Claude</p>' +
     '<p style="margin-top:12px;"><a href="mailto:mike@rednun.com?subject=Wheelhouse%20Suggestion" style="color:var(--accent);text-decoration:none;font-weight:700;">💬 Send a suggestion — mike@rednun.com</a></p>' +
     '</div></div></div>');
@@ -1866,7 +1866,7 @@ window.loadChart = function() {
 };
 
 // ==================== WHAT'S NEW POPUP ====================
-var WH_VERSION = '2.0';
+var WH_VERSION = '1.01';
 (function() {
   var seen = localStorage.getItem('wh_version_seen');
   if (seen === WH_VERSION) return;
@@ -1882,14 +1882,16 @@ var WH_VERSION = '2.0';
       '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">What\'s New</div></div>' +
       '<div style="font-size:13px;line-height:1.7;color:var(--text-primary);">' +
       '<ul style="padding-left:18px;">' +
-      '<li><strong>AI Advisor</strong> — chat-style game plans with cut transit analysis</li>' +
-      '<li><strong>Quick Look</strong> — at-a-glance conditions on the home screen</li>' +
-      '<li><strong>Cut Safety Cards</strong> — AI analysis for North &amp; South Cuts</li>' +
-      '<li><strong>Catch Logger</strong> — log species, bait, GPS on the water</li>' +
+      '<li><strong>New Home Screen</strong> — Quick Look card with conditions at a glance</li>' +
+      '<li><strong>App Navigation</strong> — hamburger menu with back button, cleaner layout</li>' +
+      '<li><strong>Cut Safety Cards</strong> — tap for AI analysis of North &amp; South Cut conditions</li>' +
+      '<li><strong>Improved Advisor Chat</strong> — bottom sheet, scroll to top of plan, markdown formatting, knows your GPS location</li>' +
       '<li><strong>Wind Trend Chart</strong> — observed + forecast with gusts</li>' +
-      '<li><strong>App Navigation</strong> — hamburger menu, section pages with back button</li>' +
-      '<li><strong>Nautical Charts</strong> — embedded NOAA chart viewer</li>' +
-      '<li><strong>More Tide Stations</strong> — Nantucket, Great Point, Vineyard Haven, Provincetown, Wellfleet</li>' +
+      '<li><strong>Windfinder</strong> — embedded forecast widget</li>' +
+      '<li><strong>Nautical Charts</strong> — NOAA charts for 9 areas, selectable dropdown</li>' +
+      '<li><strong>More Tides</strong> — added Nantucket, Great Point, Vineyard Haven, Provincetown, Wellfleet</li>' +
+      '<li><strong>Catch Logger</strong> — your logs make the AI smarter over time</li>' +
+      '<li><strong>About &amp; Suggestions</strong> — info page + email link</li>' +
       '</ul></div>' +
       '<button onclick="this.parentElement.parentElement.remove();localStorage.setItem(\'wh_version_seen\',\'' + WH_VERSION + '\')" ' +
       'style="width:100%;margin-top:16px;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Got it</button>';
