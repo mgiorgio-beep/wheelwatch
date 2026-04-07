@@ -1562,10 +1562,11 @@ window.condOpen = function(cut) {
   var html = '';
   // Pull from last briefing data if available
   if (_lastBriefing) {
-    // Current from Chatham Roads (closest to the cuts)
+    // Current from Chatham Roads only (flows through the cuts)
     var currents = _lastBriefing.currents;
     if (currents) {
       for (var key in currents) {
+        if (key === 'pollock_rip') continue; // skip — not relevant to cuts
         var c = currents[key];
         if (!c || !c.predictions) continue;
         var upcoming = c.predictions.filter(function(p) {
