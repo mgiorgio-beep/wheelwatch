@@ -18,6 +18,11 @@ STATIONS = {
     'tides': {
         'chatham': {'id': '8447435', 'name': 'Chatham, Lydia Cove'},
         'stage_harbor': {'id': '8447270', 'name': 'Stage Harbor'},
+        'nantucket': {'id': '8449130', 'name': 'Nantucket'},
+        'great_point': {'id': '8448566', 'name': 'Great Point, Nantucket'},
+        'vineyard_haven': {'id': '8448157', 'name': 'Vineyard Haven'},
+        'provincetown': {'id': '8446121', 'name': 'Provincetown'},
+        'wellfleet': {'id': '8446613', 'name': 'Wellfleet'},
     },
     'currents': {
         'pollock_rip': {'id': 'ACT1616', 'name': 'Pollock Rip Channel (Butler Hole)'},

@@ -757,6 +757,28 @@ body {
   margin-top: 12px;
 }
 
+/* Detail sections hidden by default */
+#fi-details { display: none; }
+#fi-details .fi-detail-view { display: none; }
+#fi-details .fi-detail-view.active { display: block; }
+
+/* Back button */
+.fi-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 12px;
+}
+.fi-back:active { opacity: 0.6; }
+
 /* ==================== HAMBURGER NAV ==================== */
 .nav-burger {
   position: fixed;
@@ -842,15 +864,20 @@ body {
 <div class="nav-overlay" id="nav-overlay" onclick="navToggle()"></div>
 <nav class="nav-panel" id="nav-panel">
   <div class="nav-title">Dashboard</div>
-  <button class="nav-link" onclick="navTo('fi-sec-cuts')"><span class="nav-link-icon">🔵</span> Cuts</button>
+  <button class="nav-link" onclick="navTo('fi-sec-quicklook')"><span class="nav-link-icon">⚓</span> Quick Look</button>
   <button class="nav-link" onclick="navTo('fi-sec-lunar')"><span class="nav-link-icon">🌙</span> Lunar / Solunar</button>
-  <button class="nav-link" onclick="navTo('fi-sec-buoy')"><span class="nav-link-icon">🔵</span> Buoy</button>
+  <button class="nav-link" onclick="navTo('fi-sec-buoy')"><span class="nav-link-icon">🛟</span> Buoy Info</button>
   <button class="nav-link" onclick="navTo('fi-sec-tides')"><span class="nav-link-icon">🌊</span> Tides</button>
   <button class="nav-link" onclick="navTo('fi-sec-currents')"><span class="nav-link-icon">⚡</span> Currents</button>
+  <div class="nav-divider"></div>
+  <div class="nav-title">Wind &amp; Weather</div>
   <button class="nav-link" onclick="navTo('fi-sec-wind')"><span class="nav-link-icon">💨</span> Wind Trend</button>
   <button class="nav-link" onclick="navTo('fi-sec-windfinder')"><span class="nav-link-icon">💨</span> Windfinder</button>
-  <button class="nav-link" onclick="navTo('fi-sec-weather')"><span class="nav-link-icon">🌤️</span> Hourly Weather</button>
+  <button class="nav-link" onclick="navTo('fi-sec-weather')"><span class="nav-link-icon">🌤️</span> Hourly Forecast</button>
   <button class="nav-link" onclick="navTo('fi-sec-forecast')"><span class="nav-link-icon">📋</span> Extended Forecast</button>
+  <div class="nav-divider"></div>
+  <div class="nav-title">Charts &amp; Intel</div>
+  <button class="nav-link" onclick="navTo('fi-sec-charts')"><span class="nav-link-icon">🗺️</span> Nautical Charts</button>
   <button class="nav-link" onclick="navTo('fi-sec-tidechart')"><span class="nav-link-icon">📈</span> Tide Chart</button>
   <button class="nav-link" onclick="navTo('fi-sec-sst')"><span class="nav-link-icon">🛰️</span> SST</button>
   <button class="nav-link" onclick="navTo('fi-sec-satellite')"><span class="nav-link-icon">📸</span> Satellite</button>
@@ -1135,25 +1162,56 @@ function renderQuickLook(data) {
 function renderBriefing(data) {
   var html = '';
 
-  // ---- HERO: QUICK LOOK ----
-  html += renderQuickLook(data);
+  // ---- HOME: QUICK LOOK (always visible on home) ----
+  html += '<div id="fi-home">' + renderQuickLook(data) + '</div>';
 
-  html += '<div id="fi-sec-lunar">' + renderLunar(data.lunar) + '</div>';
-  html += '<div id="fi-sec-buoy">' + renderBuoy(data.buoy) + '</div>';
-  html += '<div id="fi-sec-tides">' + renderTides(data.tides) + '</div>';
-  html += '<div id="fi-sec-currents">' + renderCurrents(data.currents) + '</div>';
-  html += '<div id="fi-sec-wind">' + renderWindTrend(data.wind_history, data.weather) + '</div>';
-  html += '<div id="fi-sec-windfinder" class="fi-card fi-full"><div class="fi-card-header">' +
+  // ---- DETAIL VIEWS (one shown at a time via nav) ----
+  html += '<div id="fi-details">';
+
+  function detailView(id, title, content) {
+    return '<div id="' + id + '" class="fi-detail-view">' +
+      '<button class="fi-back" onclick="navBack()">&#8592; Back</button>' +
+      content + '</div>';
+  }
+
+  html += detailView('fi-sec-lunar', 'Lunar', renderLunar(data.lunar));
+  html += detailView('fi-sec-buoy', 'Buoy', renderBuoy(data.buoy));
+  html += detailView('fi-sec-tides', 'Tides', renderTides(data.tides));
+  html += detailView('fi-sec-currents', 'Currents', renderCurrents(data.currents));
+  html += detailView('fi-sec-wind', 'Wind', renderWindTrend(data.wind_history, data.weather));
+  html += detailView('fi-sec-windfinder', 'Windfinder',
+    '<div class="fi-card fi-full"><div class="fi-card-header">' +
     '<div class="fi-card-title">💨 Windfinder — Chatham Forecast</div>' +
     '<span class="fi-badge fi-badge-ext">EXT</span></div>' +
-    '<div class="fi-card-body"><div id="windfinder-widget"></div></div></div>';
-  html += '<div id="fi-sec-weather">' + renderWeatherHourly(data.weather) + '</div>';
-  html += '<div id="fi-sec-forecast">' + renderForecast(data.weather) + '</div>';
-  html += '<div id="fi-sec-tidechart">' + renderTideChartCard(data.tide_chart) + '</div>';
-  html += '<div id="fi-sec-sst">' + renderSources('SST — Sea Surface Temp', '🛰️', data.sst, 'orange') + '</div>';
-  html += '<div id="fi-sec-satellite">' + renderSatelliteViewer() + '</div>';
-  html += renderSources('Visual Satellite — Open In New Tab', '📸', data.visual, '');
-  html += '<div id="fi-sec-chlorophyll">' + renderSources('Chlorophyll — Bait Finder', '🧬', data.chlorophyll, 'green') + '</div>';
+    '<div class="fi-card-body"><div id="windfinder-widget"></div></div></div>');
+  html += detailView('fi-sec-weather', 'Weather', renderWeatherHourly(data.weather));
+  html += detailView('fi-sec-forecast', 'Forecast', renderForecast(data.weather));
+  html += detailView('fi-sec-tidechart', 'Tide Chart', renderTideChartCard(data.tide_chart));
+  html += detailView('fi-sec-sst', 'SST', renderSources('SST — Sea Surface Temp', '🛰️', data.sst, 'orange'));
+  html += detailView('fi-sec-satellite', 'Satellite', renderSatelliteViewer() +
+    renderSources('Visual Satellite — Open In New Tab', '📸', data.visual, ''));
+  html += detailView('fi-sec-chlorophyll', 'Chlorophyll', renderSources('Chlorophyll — Bait Finder', '🧬', data.chlorophyll, 'green'));
+
+  html += detailView('fi-sec-charts', 'Charts',
+    '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">🗺️ Nautical Charts</div>' +
+    '<span class="fi-badge fi-badge-ext">NOAA</span></div>' +
+    '<div class="fi-card-body">' +
+    '<div style="width:100%;height:70vh;border-radius:6px;overflow:hidden;border:1px solid var(--border);">' +
+    '<iframe src="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.6700/-69.9600" ' +
+    'style="width:100%;height:100%;border:none;" loading="lazy"></iframe></div>' +
+    '<div style="margin-top:10px;">' +
+    '<a class="fi-source" href="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.6700/-69.9600" target="_blank" rel="noopener">' +
+    '<span class="fi-source-arrow">→</span>' +
+    '<div class="fi-source-name">Open Full Chart Viewer</div>' +
+    '<div class="fi-source-desc">NOAA ENC Online — Chatham / Monomoy area</div></a>' +
+    '<a class="fi-source" href="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.2850/-70.0967" target="_blank" rel="noopener">' +
+    '<span class="fi-source-arrow">→</span>' +
+    '<div class="fi-source-name">Nantucket Area Chart</div>' +
+    '<div class="fi-source-desc">NOAA ENC Online — Nantucket Harbor & approaches</div></a>' +
+    '</div></div></div>');
+
+  html += '</div>';
 
   document.getElementById('fi-content').innerHTML = html;
   document.getElementById('fi-ts').textContent = 'Updated: ' + new Date().toLocaleString();
@@ -1166,15 +1224,6 @@ function renderBriefing(data) {
     setTimeout(function() { drawWindChart(window._lastWindPoints); }, 150);
   }
 
-  // Load Windfinder widget
-  setTimeout(function() {
-    var wf = document.getElementById('windfinder-widget');
-    if (wf) {
-      var s = document.createElement('script');
-      s.src = 'https://www.windfinder.com/widget/forecast/js/chatham_cape_cod?unit_wave=ft&unit_rain=in&unit_temperature=f&unit_wind=kts';
-      wf.appendChild(s);
-    }
-  }, 200);
 }
 
 // ---- LUNAR / SOLUNAR ----
@@ -1762,12 +1811,46 @@ window.navToggle = function() {
 
 window.navTo = function(id) {
   navToggle();
-  var el = document.getElementById(id);
-  if (el) {
-    setTimeout(function() {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  }
+  // Hide home, show details container
+  var home = document.getElementById('fi-home');
+  var details = document.getElementById('fi-details');
+  var cuts = document.getElementById('fi-sec-cuts');
+  if (home) home.style.display = 'none';
+  if (cuts) cuts.style.display = 'none';
+  if (details) details.style.display = 'block';
+
+  // Hide all detail views, show the selected one
+  document.querySelectorAll('.fi-detail-view').forEach(function(v) { v.classList.remove('active'); });
+  var target = document.getElementById(id);
+  if (target) target.classList.add('active');
+
+  // Scroll to top
+  window.scrollTo(0, 0);
+
+  // Redraw charts if needed
+  setTimeout(function() {
+    if (id === 'fi-sec-tidechart' && window._lastTideData) drawTideChart(window._lastTideData);
+    if (id === 'fi-sec-wind' && window._lastWindPoints) drawWindChart(window._lastWindPoints);
+    if (id === 'fi-sec-windfinder') {
+      var wf = document.getElementById('windfinder-widget');
+      if (wf && !wf.hasChildNodes()) {
+        var s = document.createElement('script');
+        s.src = 'https://www.windfinder.com/widget/forecast/js/chatham_cape_cod?unit_wave=ft&unit_rain=in&unit_temperature=f&unit_wind=kts';
+        wf.appendChild(s);
+      }
+    }
+  }, 150);
+};
+
+window.navBack = function() {
+  var home = document.getElementById('fi-home');
+  var details = document.getElementById('fi-details');
+  var cuts = document.getElementById('fi-sec-cuts');
+  if (details) details.style.display = 'none';
+  document.querySelectorAll('.fi-detail-view').forEach(function(v) { v.classList.remove('active'); });
+  if (home) home.style.display = '';
+  if (cuts) cuts.style.display = '';
+  window.scrollTo(0, 0);
 };
 
 // ==================== CAPTAIN'S ADVISOR ====================
