@@ -964,6 +964,9 @@ function renderBriefing(data) {
   // ---- CURRENTS ----
   html += renderCurrents(data.currents);
 
+  // ---- WIND TREND (observed + forecast) ----
+  html += renderWindTrend(data.wind_history, data.weather);
+
   // ---- WEATHER HOURLY ----
   html += renderWeatherHourly(data.weather);
 
@@ -988,9 +991,12 @@ function renderBriefing(data) {
   document.getElementById('fi-content').innerHTML = html;
   document.getElementById('fi-ts').textContent = 'Updated: ' + new Date().toLocaleString();
 
-  // Draw tide chart after DOM update
+  // Draw charts after DOM update
   if (data.tide_chart && data.tide_chart.predictions) {
     setTimeout(function() { drawTideChart(data.tide_chart); }, 100);
+  }
+  if (window._lastWindPoints) {
+    setTimeout(function() { drawWindChart(window._lastWindPoints); }, 150);
   }
 }
 
@@ -1092,6 +1098,184 @@ function renderCurrents(currents) {
     html += '</div></div>';
   }
   return html;
+}
+
+// ---- WIND TREND CHART ----
+function renderWindTrend(windHistory, weather) {
+  var points = [];
+
+  // Observed wind from buoy (most recent 12 hours, newest first in data)
+  if (windHistory && windHistory.observations) {
+    var obs = windHistory.observations.slice().reverse();
+    var now = new Date();
+    obs.forEach(function(o, idx) {
+      var hoursAgo = obs.length - 1 - idx;
+      var t = new Date(now.getTime() - hoursAgo * 3600000);
+      points.push({ time: t.getTime(), speed: o.speed_kt, gust: o.gust_kt, dir: o.direction, type: 'observed' });
+    });
+  }
+
+  // Forecast wind from NWS hourly
+  if (weather && weather.hourly) {
+    weather.hourly.slice(0, 12).forEach(function(h) {
+      var t = new Date(h.startTime);
+      var ws = h.windSpeed || '';
+      var nums = ws.match(/\d+/g);
+      var spd = 0;
+      if (nums && nums.length >= 2) spd = parseInt(nums[1]);
+      else if (nums && nums.length === 1) spd = parseInt(nums[0]);
+      spd = Math.round(spd * 0.868976); // mph to knots
+      points.push({ time: t.getTime(), speed: spd, gust: null, dir: h.windDirection || '', type: 'forecast' });
+    });
+  }
+
+  if (points.length < 3) return '';
+  window._lastWindPoints = points;
+
+  return '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">💨 Wind Trend — Observed + Forecast</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body">' +
+    '<div style="width:100%;height:160px;position:relative;">' +
+    '<canvas id="fi-wind-canvas" style="width:100%;height:100%;"></canvas></div>' +
+    '</div></div>';
+}
+
+function drawWindChart(points) {
+  var canvas = document.getElementById('fi-wind-canvas');
+  if (!canvas || !points || points.length < 3) return;
+  var ctx = canvas.getContext('2d');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+
+  var W = rect.width, H = rect.height;
+  var pad = {top: 14, right: 10, bottom: 24, left: 36};
+  var cW = W - pad.left - pad.right;
+  var cH = H - pad.top - pad.bottom;
+
+  var tMin = points[0].time, tMax = points[points.length-1].time;
+  var vMax = 0;
+  points.forEach(function(p) {
+    if (p.speed > vMax) vMax = p.speed;
+    if (p.gust && p.gust > vMax) vMax = p.gust;
+  });
+  vMax = Math.ceil(vMax / 5) * 5 + 5;
+
+  function tx(t) { return pad.left + (t - tMin) / (tMax - tMin) * cW; }
+  function ty(v) { return pad.top + cH - (v / vMax) * cH; }
+
+  var cs = getComputedStyle(document.documentElement);
+
+  ctx.fillStyle = cs.getPropertyValue('--bg-card').trim() || '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = cs.getPropertyValue('--border').trim() || '#ddd';
+  ctx.lineWidth = 0.5;
+  for (var v = 0; v <= vMax; v += 5) {
+    var y = ty(v);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    ctx.fillStyle = cs.getPropertyValue('--text-muted').trim() || '#888';
+    ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(v + 'kt', pad.left - 4, y + 3);
+  }
+
+  // Time labels every 3 hours
+  var threeHr = 3 * 3600 * 1000;
+  var startHr = new Date(tMin);
+  startHr.setMinutes(0, 0, 0);
+  startHr.setHours(Math.ceil(startHr.getHours() / 3) * 3);
+  ctx.fillStyle = cs.getPropertyValue('--text-muted').trim() || '#888';
+  ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  for (var tt = startHr.getTime(); tt < tMax; tt += threeHr) {
+    var xx = tx(tt);
+    ctx.strokeStyle = cs.getPropertyValue('--border').trim() || '#ddd';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(xx, pad.top); ctx.lineTo(xx, H - pad.bottom); ctx.stroke();
+    ctx.fillText(new Date(tt).toLocaleTimeString('en-US', {hour:'numeric', hour12:true}), xx, H - 6);
+  }
+
+  // NOW marker
+  var now = Date.now();
+  if (now >= tMin && now <= tMax) {
+    var nx = tx(now);
+    ctx.strokeStyle = cs.getPropertyValue('--green').trim() || '#0a0';
+    ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(nx, pad.top); ctx.lineTo(nx, H - pad.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cs.getPropertyValue('--green').trim() || '#0a0';
+    ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('NOW', nx, pad.top - 3);
+  }
+
+  // Gust fill area
+  var gustPts = points.filter(function(p) { return p.gust; });
+  if (gustPts.length > 1) {
+    ctx.fillStyle = 'rgba(255,68,68,0.08)';
+    ctx.beginPath();
+    gustPts.forEach(function(p, i) { i === 0 ? ctx.moveTo(tx(p.time), ty(p.gust)) : ctx.lineTo(tx(p.time), ty(p.gust)); });
+    gustPts.slice().reverse().forEach(function(p) { ctx.lineTo(tx(p.time), ty(p.speed)); });
+    ctx.closePath(); ctx.fill();
+
+    // Gust line (dashed red)
+    ctx.strokeStyle = cs.getPropertyValue('--red').trim() || '#d33';
+    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    gustPts.forEach(function(p, i) { i === 0 ? ctx.moveTo(tx(p.time), ty(p.gust)) : ctx.lineTo(tx(p.time), ty(p.gust)); });
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Observed line (solid)
+  var obsPts = points.filter(function(p) { return p.type === 'observed'; });
+  if (obsPts.length > 1) {
+    ctx.strokeStyle = cs.getPropertyValue('--accent').trim() || '#08c';
+    ctx.lineWidth = 2; ctx.beginPath();
+    obsPts.forEach(function(p, i) { i === 0 ? ctx.moveTo(tx(p.time), ty(p.speed)) : ctx.lineTo(tx(p.time), ty(p.speed)); });
+    ctx.stroke();
+  }
+
+  // Forecast line (dashed)
+  var fcPts = points.filter(function(p) { return p.type === 'forecast'; });
+  if (fcPts.length > 1) {
+    ctx.strokeStyle = cs.getPropertyValue('--accent').trim() || '#08c';
+    ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    if (obsPts.length > 0) {
+      var last = obsPts[obsPts.length - 1];
+      ctx.moveTo(tx(last.time), ty(last.speed));
+      ctx.lineTo(tx(fcPts[0].time), ty(fcPts[0].speed));
+    }
+    fcPts.forEach(function(p, i) { if (i === 0 && obsPts.length === 0) ctx.moveTo(tx(p.time), ty(p.speed)); else ctx.lineTo(tx(p.time), ty(p.speed)); });
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Legend
+  ctx.font = '9px monospace';
+  var lx = pad.left + 4, ly = pad.top + 10;
+  ctx.strokeStyle = cs.getPropertyValue('--accent').trim() || '#08c';
+  ctx.lineWidth = 2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 16, ly); ctx.stroke();
+  ctx.fillStyle = cs.getPropertyValue('--text-secondary').trim() || '#666';
+  ctx.textAlign = 'left';
+  ctx.fillText('Observed', lx + 20, ly + 3);
+  ly += 12;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 16, ly); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillText('Forecast', lx + 20, ly + 3);
+  if (gustPts.length > 0) {
+    ly += 12;
+    ctx.strokeStyle = cs.getPropertyValue('--red').trim() || '#d33';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 16, ly); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText('Gusts', lx + 20, ly + 3);
+  }
 }
 
 // ---- WEATHER HOURLY ----
@@ -1754,6 +1938,7 @@ window.catchSave = function() {
 window.addEventListener('resize', function() {
   var canvas = document.getElementById('fi-tide-canvas');
   if (canvas && window._lastTideData) drawTideChart(window._lastTideData);
+  if (window._lastWindPoints) drawWindChart(window._lastWindPoints);
 });
 
 })();
