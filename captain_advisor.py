@@ -278,12 +278,13 @@ def register_advisor_routes(app, login_required):
 
         live_data = get_live_data_context()
 
-        cut_prompt = """Based on the current conditions below, give a brief safety and navigation analysis for the Chatham North and South Cuts. Keep it under 150 words. Be direct — the captain knows these waters.
+        cut_prompt = """Based on the current conditions below, give a brief safety and navigation analysis for the Chatham North and South Cuts. Keep it under 200 words. Be direct — the captain knows these waters.
 
 Include:
 - Which cut is better right now and why
 - Current flow direction and strength through each
 - Any safety concerns (opposing wind/current, breaking bars, etc.)
+- **BEST TRANSIT WINDOWS**: Give specific times today for safest outbound (harbor to ocean) and inbound (ocean to harbor) transit through each cut. Base this on when current and wind are most favorable (ideally slack or flood for outbound, slack or ebb for inbound, and not opposing wind).
 - A one-line recommendation
 
 Current conditions:
