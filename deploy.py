@@ -5,7 +5,7 @@ import secrets
 import time
 from dotenv import load_dotenv
 
-load_dotenv('.env.deploy')
+load_dotenv('.env.deploy', override=True)
 
 SSH_HOST = os.environ.get('WH_SSH_HOST', 'ssh.rednun.com')
 SSH_PORT = int(os.environ.get('WH_SSH_PORT', '2222'))

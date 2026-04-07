@@ -296,37 +296,506 @@ body {
   font-weight: 700;
   letter-spacing: 0.5px;
 }
+
+/* ==================== ADVISOR CHAT (BOTTOM SHEET) ==================== */
+.advisor-fab {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 28px;
+  padding: 14px 20px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.advisor-fab:active { transform: scale(0.95); }
+
+.advisor-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1001;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s;
+}
+.advisor-overlay.open { opacity: 1; pointer-events: auto; }
+
+.advisor-panel {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 92vh;
+  background: var(--bg-primary);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform .35s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+}
+.advisor-panel.open { transform: translateY(0); }
+
+.advisor-handle {
+  display: flex; justify-content: center;
+  padding: 10px 0 4px; flex-shrink: 0;
+}
+.advisor-handle-bar {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--border-light);
+}
+
+.advisor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.advisor-header-title {
+  font-size: 15px; font-weight: 700;
+  color: var(--text-primary);
+}
+.advisor-close {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 32px; height: 32px; border-radius: 50%;
+  cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.advisor-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+
+.advisor-welcome {
+  text-align: center;
+  padding: 32px 16px;
+}
+.advisor-welcome-icon { font-size: 36px; margin-bottom: 10px; }
+.advisor-welcome-title {
+  font-size: 15px; font-weight: 700;
+  color: var(--text-primary); margin-bottom: 6px;
+}
+.advisor-welcome-text {
+  font-size: 12px; color: var(--text-secondary);
+  line-height: 1.6; max-width: 280px; margin: 0 auto 16px;
+}
+.advisor-starters {
+  display: flex; flex-direction: column;
+  gap: 8px; max-width: 300px; margin: 0 auto;
+}
+.advisor-starter {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.advisor-starter:active { background: var(--bg-card-hover); border-color: var(--accent); }
+
+.advisor-msg {
+  margin-bottom: 10px;
+  max-width: 90%;
+}
+.advisor-msg.user { margin-left: auto; }
+.advisor-msg-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  letter-spacing: 0.3px;
+}
+.advisor-msg.user .advisor-msg-label { text-align: right; }
+.advisor-msg-bubble {
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.advisor-msg.user .advisor-msg-bubble {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: 12px 12px 4px 12px;
+  color: var(--text-primary);
+}
+.advisor-msg.assistant .advisor-msg-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 12px 4px;
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.advisor-msg-bubble h3 {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  margin: 10px 0 4px;
+}
+.advisor-msg-bubble h3:first-child { margin-top: 0; }
+.advisor-msg-bubble p { margin: 4px 0; }
+.advisor-msg-bubble ul, .advisor-msg-bubble ol { margin: 4px 0; padding-left: 18px; }
+.advisor-msg-bubble li { margin: 2px 0; }
+.advisor-msg-bubble strong { color: var(--accent); font-weight: 700; }
+.advisor-msg-bubble em { color: var(--text-secondary); }
+.advisor-msg-bubble hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+.advisor-typing {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 12px 4px;
+  max-width: 160px;
+}
+.advisor-dots { display: flex; gap: 4px; }
+.advisor-dots span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent); animation: adot 1.4s infinite;
+}
+.advisor-dots span:nth-child(2) { animation-delay: .2s; }
+.advisor-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes adot {
+  0%,60%,100% { transform: translateY(0); opacity:.3; }
+  30% { transform: translateY(-3px); opacity:1; }
+}
+
+.advisor-input-area {
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+.advisor-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.advisor-input {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+  resize: none;
+  max-height: 80px;
+  line-height: 1.4;
+}
+.advisor-input::placeholder { color: var(--text-muted); }
+.advisor-input:focus { border-color: var(--accent); }
+.advisor-send {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.advisor-send:active { opacity: 0.8; }
+.advisor-send:disabled { opacity: 0.4; }
+
+/* ==================== CATCH LOGGING ==================== */
+.catch-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 28px;
+  padding: 14px 20px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.catch-fab:active { transform: scale(0.95); }
+
+.catch-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1001;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s;
+}
+.catch-overlay.open { opacity: 1; pointer-events: auto; }
+
+.catch-panel {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  max-height: 85vh;
+  background: var(--bg-primary);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform .35s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+}
+.catch-panel.open { transform: translateY(0); }
+
+.catch-handle {
+  display: flex; justify-content: center;
+  padding: 10px 0 4px;
+}
+.catch-handle-bar {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--border-light);
+}
+
+.catch-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.catch-header-title {
+  font-size: 15px; font-weight: 700;
+  color: var(--text-primary);
+}
+.catch-close {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 32px; height: 32px; border-radius: 50%;
+  cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.catch-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.catch-label {
+  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  letter-spacing: 0.5px; text-transform: uppercase;
+  margin-bottom: 6px; margin-top: 14px;
+}
+.catch-label:first-child { margin-top: 0; }
+
+.catch-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.catch-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.catch-chip:active, .catch-chip.selected {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.catch-select, .catch-input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  -webkit-appearance: none;
+}
+.catch-select:focus, .catch-input:focus { border-color: var(--accent); }
+.catch-input::placeholder { color: var(--text-muted); }
+
+.catch-gps {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+.catch-gps .gps-coords {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.catch-save {
+  width: 100%;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  letter-spacing: 0.5px;
+}
+.catch-save:active { opacity: 0.85; }
+.catch-save:disabled { opacity: 0.4; }
+
+.catch-success {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ==================== CONDITIONS CARDS (CUTS, BUOYS) ==================== */
+.cond-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media(max-width:500px) { .cond-cards { grid-template-columns: 1fr; } }
+.cond-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color .15s;
+  position: relative;
+}
+.cond-card:active { border-color: var(--accent); }
+.cond-card-title {
+  font-size: 12px; font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.cond-card-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.cond-card-arrow {
+  position: absolute;
+  right: 12px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Conditions popup */
+.cond-popup-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1001;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.cond-popup-overlay.open { opacity: 1; pointer-events: auto; }
+.cond-popup {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90%; max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: 1002;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.cond-popup.open {
+  opacity: 1; pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+.cond-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px; border-bottom: 1px solid var(--border);
+}
+.cond-popup-title {
+  font-size: 15px; font-weight: 700;
+  color: var(--text-primary);
+}
+.cond-popup-close {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 28px; height: 28px; border-radius: 50%;
+  cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cond-popup-body { padding: 16px; }
+.cond-popup-body .fi-row { padding: 6px 0; }
+.cond-coming-soon {
+  font-size: 11px; color: var(--text-muted);
+  font-style: italic; padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
 </style>
 </head>
 <body>
 
 <div class="fi-wrap" id="fi-app">
 
-  <!-- CAPTAIN'S ADVISOR CHAT -->
-  <div class="fi-card" style="margin-bottom:20px;border-color:#00d4ff30;">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#00d4ff60,transparent);"></div>
-    <div class="fi-card-header">
-      <div class="fi-card-title">🧠 Wheelhouse Advisor</div>
-      <span class="fi-badge fi-badge-live">AI</span>
-    </div>
-    <div class="fi-card-body">
-      <div id="advisor-chat" style="max-height:400px;overflow-y:auto;margin-bottom:12px;"></div>
-      <div style="display:flex;gap:8px;">
-        <input id="advisor-input" type="text"
-          placeholder="Leaving Ryder's Cove tomorrow at 12 PM..."
-          style="flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:10px 14px;
-                 color:#e0e8f0;font-family:inherit;font-size:13px;outline:none;"
-          onkeydown="if(event.key==='Enter')advisorSend()"
-        >
-        <button onclick="advisorSend()"
-          style="background:#00d4ff15;border:1px solid #00d4ff40;color:#00d4ff;padding:10px 18px;
-                 border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;
-                 letter-spacing:1px;white-space:nowrap;">
-          SEND
-        </button>
+  <!-- ADVISOR FAB -->
+  <button class="advisor-fab" id="advisor-fab" onclick="advisorToggle()">🧠 Advisor</button>
+
+  <!-- ADVISOR OVERLAY -->
+  <div class="advisor-overlay" id="advisor-overlay" onclick="advisorToggle()"></div>
+
+  <!-- ADVISOR BOTTOM SHEET -->
+  <div class="advisor-panel" id="advisor-panel">
+    <div class="advisor-handle"><div class="advisor-handle-bar"></div></div>
+    <div class="advisor-header">
+      <div class="advisor-header-title">🧠 Wheelhouse Advisor</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="advisor-close" onclick="advisorNewChat()" style="font-size:11px;width:auto;border-radius:6px;padding:6px 10px;letter-spacing:0.3px;">New</button>
+        <button class="advisor-close" onclick="advisorToggle()">&#9660;</button>
       </div>
-      <div style="font-size:10px;color:#4a5a6a;margin-top:6px;">
-        Tell me when you're leaving, and I'll analyze live tides, currents, weather, SST and give you a game plan.
+    </div>
+    <div class="advisor-messages" id="advisor-chat">
+      <div class="advisor-welcome" id="advisor-welcome">
+        <div class="advisor-welcome-icon">🎣</div>
+        <div class="advisor-welcome-title">Your Captain's Advisor</div>
+        <div class="advisor-welcome-text">Tell me when you're heading out and I'll build a game plan using live tides, currents, weather, and SST.</div>
+        <div class="advisor-starters">
+          <button class="advisor-starter" onclick="advisorQuick('Leaving Ryder\'s Cove tomorrow at first light')">Leaving Ryder's Cove at first light</button>
+          <button class="advisor-starter" onclick="advisorQuick('What do conditions look like this weekend?')">Conditions this weekend?</button>
+          <button class="advisor-starter" onclick="advisorQuick('Best tide window for Monomoy today?')">Best tide window for Monomoy today?</button>
+        </div>
+      </div>
+    </div>
+    <div class="advisor-input-area">
+      <div class="advisor-input-row">
+        <textarea id="advisor-input" class="advisor-input" rows="1"
+          placeholder="Where and when are you heading out?"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();advisorSend();}"></textarea>
+        <button id="advisor-send-btn" class="advisor-send" onclick="advisorSend()">&#9654;</button>
       </div>
     </div>
   </div>
@@ -339,10 +808,107 @@ body {
     <button class="fi-refresh" id="fi-refresh-btn" onclick="fiLoad()">↻ Refresh</button>
   </div>
 
+  <!-- CONDITIONS QUICK CARDS -->
+  <div class="cond-cards">
+    <div class="cond-card" onclick="condOpen('north')">
+      <div class="cond-card-title">🔵 North Cut</div>
+      <div class="cond-card-sub">Current &amp; conditions</div>
+      <span class="cond-card-arrow">›</span>
+    </div>
+    <div class="cond-card" onclick="condOpen('south')">
+      <div class="cond-card-title">🔴 South Cut</div>
+      <div class="cond-card-sub">Current &amp; conditions</div>
+      <span class="cond-card-arrow">›</span>
+    </div>
+  </div>
+
+  <!-- CONDITIONS POPUP -->
+  <div class="cond-popup-overlay" id="cond-popup-overlay" onclick="condClose()"></div>
+  <div class="cond-popup" id="cond-popup">
+    <div class="cond-popup-header">
+      <div class="cond-popup-title" id="cond-popup-title"></div>
+      <button class="cond-popup-close" onclick="condClose()">&times;</button>
+    </div>
+    <div class="cond-popup-body" id="cond-popup-body"></div>
+  </div>
+
   <div class="fi-grid" id="fi-content">
     <div class="fi-full">
       <div class="fi-loading"><div class="fi-spinner"></div> ACQUIRING DATA FROM NOAA...</div>
     </div>
+  </div>
+</div>
+
+<!-- LOG CATCH FAB -->
+<button class="catch-fab" id="catch-fab" onclick="catchToggle()">🐟 Log Catch</button>
+
+<!-- CATCH OVERLAY -->
+<div class="catch-overlay" id="catch-overlay" onclick="catchToggle()"></div>
+
+<!-- CATCH PANEL -->
+<div class="catch-panel" id="catch-panel">
+  <div class="catch-handle"><div class="catch-handle-bar"></div></div>
+  <div class="catch-header">
+    <div class="catch-header-title">🐟 Log a Catch</div>
+    <button class="catch-close" onclick="catchToggle()">&times;</button>
+  </div>
+  <div class="catch-body" id="catch-body">
+    <div class="catch-label">Spot</div>
+    <div class="catch-chips" id="catch-spot-chips">
+      <button class="catch-chip" onclick="catchPickSpot(this)">Monomoy</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">Pollock Rip</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">Chatham Bars</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">Handkerchief</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">Nauset Beach</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">South of Nantucket</button>
+      <button class="catch-chip" onclick="catchPickSpot(this)">Outside the Cuts</button>
+    </div>
+    <input id="catch-spot" class="catch-input" placeholder="Or type a spot name..." style="margin-top:6px;">
+
+    <div class="catch-label">Species</div>
+    <select id="catch-species" class="catch-select">
+      <option value="">Select species...</option>
+      <option>Striped Bass</option>
+      <option>Bluefish</option>
+      <option>False Albacore</option>
+      <option>Bonito</option>
+      <option>Fluke</option>
+      <option>Black Sea Bass</option>
+      <option>Tuna</option>
+      <option>Other</option>
+    </select>
+
+    <div class="catch-label">Technique</div>
+    <select id="catch-technique" class="catch-select">
+      <option value="">Select technique...</option>
+      <option>Casting</option>
+      <option>Trolling</option>
+      <option>Jigging</option>
+      <option>Live Bait</option>
+      <option>Fly</option>
+      <option>Drifting</option>
+      <option>Other</option>
+    </select>
+
+    <div class="catch-label">Lure / Bait</div>
+    <div class="catch-chips" id="catch-lure-chips">
+      <button class="catch-chip" onclick="catchPickLure(this)">White Bucktail</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">Slug-Go</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">Live Eel</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">Chunk</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">Diamond Jig</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">Popper</button>
+      <button class="catch-chip" onclick="catchPickLure(this)">SP Minnow</button>
+    </div>
+    <input id="catch-lure" class="catch-input" placeholder="Or type lure/bait..." style="margin-top:6px;">
+
+    <div class="catch-label">Notes (optional)</div>
+    <textarea id="catch-notes" class="catch-input" rows="2" placeholder="Size, color, anything notable..."></textarea>
+
+    <div class="catch-label">GPS Location</div>
+    <div class="catch-gps" id="catch-gps-status">Getting location...</div>
+
+    <button class="catch-save" id="catch-save-btn" onclick="catchSave()">Save Catch</button>
   </div>
 </div>
 
@@ -800,6 +1366,7 @@ window.fiLoad = function() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
+      _lastBriefing = data;
       renderBriefing(data);
       loading = false;
       btn.disabled = false;
@@ -826,24 +1393,95 @@ setInterval(fiLoad, 15 * 60 * 1000);
 // ==================== CAPTAIN'S ADVISOR ====================
 var advisorHistory = [];
 var advisorBusy = false;
+var advisorOpen = false;
+
+window.advisorToggle = function() {
+  advisorOpen = !advisorOpen;
+  document.getElementById('advisor-panel').classList.toggle('open', advisorOpen);
+  document.getElementById('advisor-overlay').classList.toggle('open', advisorOpen);
+  document.getElementById('advisor-fab').style.display = advisorOpen ? 'none' : 'flex';
+  if (advisorOpen) {
+    document.getElementById('advisor-input').focus();
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+};
+
+window.advisorNewChat = function() {
+  advisorHistory = [];
+  var chat = document.getElementById('advisor-chat');
+  chat.innerHTML = '';
+  // Re-add welcome
+  var w = document.createElement('div');
+  w.className = 'advisor-welcome';
+  w.id = 'advisor-welcome';
+  w.innerHTML = '<div class="advisor-welcome-icon">🎣</div>' +
+    '<div class="advisor-welcome-title">Your Captain\'s Advisor</div>' +
+    '<div class="advisor-welcome-text">Tell me when you\'re heading out and I\'ll build a game plan using live tides, currents, weather, and SST.</div>' +
+    '<div class="advisor-starters">' +
+    '<button class="advisor-starter" onclick="advisorQuick(\'Leaving Ryder\\\'s Cove tomorrow at first light\')">Leaving Ryder\'s Cove at first light</button>' +
+    '<button class="advisor-starter" onclick="advisorQuick(\'What do conditions look like this weekend?\')">Conditions this weekend?</button>' +
+    '<button class="advisor-starter" onclick="advisorQuick(\'Best tide window for Monomoy today?\')">Best tide window for Monomoy today?</button>' +
+    '</div>';
+  chat.appendChild(w);
+};
+
+window.advisorQuick = function(msg) {
+  document.getElementById('advisor-input').value = msg;
+  advisorSend();
+};
+
+// Simple markdown-ish rendering
+function advisorMd(text) {
+  var s = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/^---$/gm, '<hr>');
+  s = s.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+  s = s.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  s = s.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  s = s.replace(/\n\n/g, '</p><p>');
+  s = s.replace(/\n/g, '<br>');
+  return '<p>' + s + '</p>';
+}
 
 function advisorAddMsg(role, text) {
   var chat = document.getElementById('advisor-chat');
   if (!chat) return;
-  var div = document.createElement('div');
-  div.style.cssText = 'margin:8px 0;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;';
-  if (role === 'user') {
-    div.style.background = '#00d4ff10';
-    div.style.borderLeft = '3px solid #00d4ff';
-    div.style.color = '#c0d0e0';
+  // Hide welcome on first message
+  var welcome = document.getElementById('advisor-welcome');
+  if (welcome) welcome.style.display = 'none';
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'advisor-msg ' + role;
+
+  var label = document.createElement('div');
+  label.className = 'advisor-msg-label';
+  label.textContent = role === 'user' ? 'You' : 'Advisor';
+
+  var bubble = document.createElement('div');
+  bubble.className = 'advisor-msg-bubble';
+  if (role === 'assistant') {
+    bubble.innerHTML = advisorMd(text);
   } else {
-    div.style.background = 'var(--bg-card)';
-    div.style.borderLeft = '3px solid #00e676';
-    div.style.color = '#e0e8f0';
+    bubble.textContent = text;
   }
-  div.textContent = text;
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+
+  wrapper.appendChild(label);
+  wrapper.appendChild(bubble);
+  chat.appendChild(wrapper);
+
+  // User msgs: scroll to bottom. Assistant msgs: scroll to top of response.
+  if (role === 'user') {
+    chat.scrollTop = chat.scrollHeight;
+  } else {
+    setTimeout(function() {
+      wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
 }
 
 function advisorAddLoading() {
@@ -851,8 +1489,7 @@ function advisorAddLoading() {
   if (!chat) return;
   var div = document.createElement('div');
   div.id = 'advisor-loading';
-  div.style.cssText = 'margin:8px 0;padding:10px 14px;';
-  div.innerHTML = '<div class="fi-loading"><div class="fi-spinner"></div> Analyzing conditions...</div>';
+  div.innerHTML = '<div class="advisor-typing"><div class="advisor-dots"><span></span><span></span><span></span></div><span style="font-size:11px;color:var(--text-muted);">Analyzing...</span></div>';
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -862,16 +1499,28 @@ function advisorRemoveLoading() {
   if (el) el.remove();
 }
 
+// Auto-resize textarea
+function advisorResize() {
+  var ta = document.getElementById('advisor-input');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+}
+document.getElementById('advisor-input').addEventListener('input', advisorResize);
+
 window.advisorSend = function() {
   if (advisorBusy) return;
   var input = document.getElementById('advisor-input');
   var msg = input.value.trim();
   if (!msg) return;
   input.value = '';
+  advisorResize();
+
+  if (!advisorOpen) advisorToggle();
 
   advisorAddMsg('user', msg);
   advisorAddLoading();
   advisorBusy = true;
+  document.getElementById('advisor-send-btn').disabled = true;
 
   fetch('/api/fishing/advisor', {
     method: 'POST',
@@ -885,20 +1534,218 @@ window.advisorSend = function() {
   .then(function(data) {
     advisorRemoveLoading();
     if (data.error) {
-      advisorAddMsg('assistant', '⚠ ' + data.error);
+      advisorAddMsg('assistant', data.error);
     } else {
       advisorAddMsg('assistant', data.response);
       advisorHistory.push({role: 'user', content: msg});
       advisorHistory.push({role: 'assistant', content: data.response});
-      // Keep history manageable
       if (advisorHistory.length > 20) advisorHistory = advisorHistory.slice(-16);
     }
     advisorBusy = false;
+    document.getElementById('advisor-send-btn').disabled = false;
   })
   .catch(function(err) {
     advisorRemoveLoading();
-    advisorAddMsg('assistant', '⚠ Connection error: ' + err.message);
+    advisorAddMsg('assistant', 'Connection error: ' + err.message);
     advisorBusy = false;
+    document.getElementById('advisor-send-btn').disabled = false;
+  });
+};
+
+// ==================== CONDITIONS POPUP ====================
+var _lastBriefing = null;
+
+window.condOpen = function(cut) {
+  var title = cut === 'north' ? '🔵 North Cut — Conditions' : '🔴 South Cut — Conditions';
+  document.getElementById('cond-popup-title').textContent = title;
+
+  var html = '';
+  // Pull from last briefing data if available
+  if (_lastBriefing) {
+    // Current from Chatham Roads (closest to the cuts)
+    var currents = _lastBriefing.currents;
+    if (currents) {
+      for (var key in currents) {
+        var c = currents[key];
+        if (!c || !c.predictions) continue;
+        var upcoming = c.predictions.filter(function(p) {
+          try { return new Date(p.Time.replace(' ', 'T')) > new Date(); } catch(e) { return true; }
+        }).slice(0, 3);
+        html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;margin-top:10px;letter-spacing:0.5px;">' + c.station.name.toUpperCase() + '</div>';
+        upcoming.forEach(function(p) {
+          var type = p.Type || '';
+          var cls = type === 'flood' ? 'fi-flood' : type === 'ebb' ? 'fi-ebb' : 'fi-slack';
+          var tag = type === 'flood' ? '↗ FLOOD' : type === 'ebb' ? '↙ EBB' : 'SLACK';
+          var vel = p.Velocity_Major ? parseFloat(p.Velocity_Major).toFixed(1) + ' kt' : 'slack';
+          var t = p.Time.includes('T') ? new Date(p.Time) : new Date(p.Time.replace(' ', 'T'));
+          var label = t.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+          html += '<div class="fi-row"><span class="fi-row-label">' + label + '</span>' +
+            '<div><span class="fi-row-value ' + cls + '">' + vel + '</span>' +
+            '<div class="fi-row-sub">' + tag + '</div></div></div>';
+        });
+      }
+    }
+    // Wind & water temp from buoy
+    if (_lastBriefing.buoy && _lastBriefing.buoy.observation) {
+      var obs = _lastBriefing.buoy.observation;
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin:10px 0 6px;letter-spacing:0.5px;">BUOY 44018</div>';
+      var waterTemp = obs.WTMP ? (parseFloat(obs.WTMP) * 9/5 + 32).toFixed(1) + '°F' : '--';
+      var windSpd = obs.WSPD ? (parseFloat(obs.WSPD) * 1.944).toFixed(0) + ' kt' : '--';
+      var windDir = obs.WDIR || '--';
+      var waveHt = obs.WVHT ? parseFloat(obs.WVHT).toFixed(1) + ' ft' : '--';
+      html += '<div class="fi-row"><span class="fi-row-label">Water Temp</span><span class="fi-row-value">' + waterTemp + '</span></div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Wind</span><span class="fi-row-value">' + windDir + '° at ' + windSpd + '</span></div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Waves</span><span class="fi-row-value">' + waveHt + '</span></div>';
+    }
+  } else {
+    html += '<div style="color:var(--text-muted);font-size:13px;">Loading conditions... Refresh the dashboard first.</div>';
+  }
+
+  // AI Analysis section
+  html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;letter-spacing:0.5px;">🧠 AI ANALYSIS</div>' +
+    '<div id="cond-ai-analysis" style="font-size:13px;color:var(--text-primary);line-height:1.6;">' +
+    '<div class="fi-loading"><div class="fi-spinner"></div> Analyzing conditions...</div></div></div>';
+
+  html += '<div class="cond-coming-soon">More buoys and stations coming soon — Nauset, Monomoy Point, Nantucket Sound</div>';
+
+  document.getElementById('cond-popup-body').innerHTML = html;
+  document.getElementById('cond-popup').classList.add('open');
+  document.getElementById('cond-popup-overlay').classList.add('open');
+
+  // Fetch AI analysis
+  fetch('/api/fishing/cuts')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var el = document.getElementById('cond-ai-analysis');
+      if (!el) return;
+      if (data.error) {
+        el.innerHTML = '<span style="color:var(--red);">Could not load analysis</span>';
+      } else {
+        el.innerHTML = data.analysis.replace(/\n/g, '<br>');
+      }
+    })
+    .catch(function() {
+      var el = document.getElementById('cond-ai-analysis');
+      if (el) el.innerHTML = '<span style="color:var(--red);">Could not load analysis</span>';
+    });
+};
+
+window.condClose = function() {
+  document.getElementById('cond-popup').classList.remove('open');
+  document.getElementById('cond-popup-overlay').classList.remove('open');
+};
+
+// ==================== CATCH LOGGING ====================
+var catchOpen = false;
+var catchGps = null;
+
+window.catchToggle = function() {
+  catchOpen = !catchOpen;
+  document.getElementById('catch-panel').classList.toggle('open', catchOpen);
+  document.getElementById('catch-overlay').classList.toggle('open', catchOpen);
+  document.getElementById('catch-fab').style.display = catchOpen ? 'none' : 'flex';
+  if (catchOpen) {
+    catchResetForm();
+    catchGetGps();
+  }
+};
+
+function catchResetForm() {
+  document.getElementById('catch-spot').value = '';
+  document.getElementById('catch-species').value = '';
+  document.getElementById('catch-technique').value = '';
+  document.getElementById('catch-lure').value = '';
+  document.getElementById('catch-notes').value = '';
+  document.getElementById('catch-gps-status').innerHTML = 'Getting location...';
+  document.getElementById('catch-save-btn').disabled = false;
+  catchGps = null;
+  // Clear chip selections
+  document.querySelectorAll('.catch-chip').forEach(function(c) { c.classList.remove('selected'); });
+  // Restore form if it was showing success
+  var body = document.getElementById('catch-body');
+  if (body.querySelector('.catch-success')) {
+    body.querySelector('.catch-success').remove();
+    Array.from(body.children).forEach(function(el) { el.style.display = ''; });
+  }
+}
+
+function catchGetGps() {
+  if (!navigator.geolocation) {
+    document.getElementById('catch-gps-status').innerHTML = 'GPS not available on this device';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      catchGps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      document.getElementById('catch-gps-status').innerHTML =
+        '<span class="gps-coords">' + catchGps.lat.toFixed(4) + ', ' + catchGps.lon.toFixed(4) + '</span>';
+    },
+    function() {
+      document.getElementById('catch-gps-status').innerHTML = 'GPS unavailable — catch will save without location';
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+window.catchPickSpot = function(btn) {
+  document.querySelectorAll('#catch-spot-chips .catch-chip').forEach(function(c) { c.classList.remove('selected'); });
+  btn.classList.add('selected');
+  document.getElementById('catch-spot').value = btn.textContent;
+};
+
+window.catchPickLure = function(btn) {
+  document.querySelectorAll('#catch-lure-chips .catch-chip').forEach(function(c) { c.classList.remove('selected'); });
+  btn.classList.add('selected');
+  document.getElementById('catch-lure').value = btn.textContent;
+};
+
+window.catchSave = function() {
+  var spot = document.getElementById('catch-spot').value.trim();
+  if (!spot) {
+    document.getElementById('catch-spot').style.borderColor = 'var(--red)';
+    setTimeout(function() { document.getElementById('catch-spot').style.borderColor = ''; }, 2000);
+    return;
+  }
+
+  var payload = {
+    spot: spot,
+    species: document.getElementById('catch-species').value,
+    technique: document.getElementById('catch-technique').value,
+    lure: document.getElementById('catch-lure').value.trim(),
+    notes: document.getElementById('catch-notes').value.trim(),
+    gps: catchGps
+  };
+
+  document.getElementById('catch-save-btn').disabled = true;
+  document.getElementById('catch-save-btn').textContent = 'Saving...';
+
+  fetch('/api/fishing/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      document.getElementById('catch-save-btn').textContent = 'Error — Try Again';
+      document.getElementById('catch-save-btn').disabled = false;
+      return;
+    }
+    // Show success
+    var body = document.getElementById('catch-body');
+    Array.from(body.children).forEach(function(el) { el.style.display = 'none'; });
+    var msg = document.createElement('div');
+    msg.className = 'catch-success';
+    msg.innerHTML = '🎣 Catch logged!<br><span style="font-size:12px;color:var(--text-muted);">' + spot +
+      (payload.species ? ' — ' + payload.species : '') + '</span>';
+    body.appendChild(msg);
+    // Auto-close after 1.5s
+    setTimeout(function() { if (catchOpen) catchToggle(); }, 1500);
+  })
+  .catch(function() {
+    document.getElementById('catch-save-btn').textContent = 'Error — Try Again';
+    document.getElementById('catch-save-btn').disabled = false;
   });
 };
 

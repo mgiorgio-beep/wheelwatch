@@ -254,6 +254,54 @@ def register_advisor_routes(app, login_required):
             'timestamp': datetime.now().isoformat(),
         })
 
+    # ---- Cut Conditions Analysis ----
+    @app.route('/api/fishing/cuts', methods=['GET'])
+    @login_required
+    def api_cuts_analysis():
+        """Quick AI analysis of conditions at the Chatham cuts."""
+        if not ANTHROPIC_API_KEY:
+            return jsonify({'error': 'API key not configured'}), 500
+
+        live_data = get_live_data_context()
+
+        cut_prompt = """Based on the current conditions below, give a brief safety and navigation analysis for the Chatham North and South Cuts. Keep it under 150 words. Be direct — the captain knows these waters.
+
+Include:
+- Which cut is better right now and why
+- Current flow direction and strength through each
+- Any safety concerns (opposing wind/current, breaking bars, etc.)
+- A one-line recommendation
+
+Current conditions:
+""" + live_data
+
+        try:
+            r = requests.post(
+                ANTHROPIC_URL,
+                headers={
+                    'Content-Type': 'application/json',
+                    'x-api-key': ANTHROPIC_API_KEY,
+                    'anthropic-version': '2023-06-01',
+                },
+                json={
+                    'model': MODEL,
+                    'max_tokens': 400,
+                    'system': 'You are a concise navigation safety advisor for Chatham, MA. The North and South Cuts are shifting sand channels between the mainland and Monomoy Island. They can be very dangerous with opposing wind and current. Be direct and safety-focused.',
+                    'messages': [{'role': 'user', 'content': cut_prompt}],
+                },
+                timeout=20,
+            )
+            r.raise_for_status()
+            data = r.json()
+            text = ''
+            for block in data.get('content', []):
+                if block.get('type') == 'text':
+                    text += block['text']
+            return jsonify({'analysis': text})
+        except Exception as e:
+            logger.error(f'Cuts analysis error: {e}')
+            return jsonify({'error': str(e)}), 500
+
     # ---- Save / List / View Logs ----
     import glob as globmod
 
