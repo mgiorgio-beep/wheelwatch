@@ -857,6 +857,7 @@ body {
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
 </head>
 <body>
 
@@ -1987,17 +1988,11 @@ window.loadChart = function() {
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
 
   // NOAA ENC raster nautical charts with depth soundings
-  // Base map
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: 'OSM',
-    maxZoom: 18
-  }).addTo(chartMap);
-
-  // NOAA nautical chart overlay
-  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
-    attribution: 'NOAA',
-    maxZoom: 16,
-    opacity: 0.85
+  // NOAA ENC nautical chart with depths
+  L.esri.dynamicMapLayer({
+    url: 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer',
+    layers: [0,1,2,3,4,5,6,7],
+    attribution: 'NOAA ENC'
   }).addTo(chartMap);
 };
 
@@ -2476,15 +2471,10 @@ window.openCatchMap = function(idx) {
 
   catchMapInstance = L.map(container).setView([log.gps.lat, log.gps.lon], 14);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: 'OSM',
-    maxZoom: 18
-  }).addTo(catchMapInstance);
-
-  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
-    attribution: 'NOAA',
-    maxZoom: 16,
-    opacity: 0.85
+  L.esri.dynamicMapLayer({
+    url: 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer',
+    layers: [0,1,2,3,4,5,6,7],
+    attribution: 'NOAA ENC'
   }).addTo(catchMapInstance);
 
   var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
