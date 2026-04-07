@@ -1987,10 +1987,17 @@ window.loadChart = function() {
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
 
   // NOAA ENC raster nautical charts with depth soundings
-  L.tileLayer('https://seamlessrnc.nauticalcharts.noaa.gov/arcgis/rest/services/RNC/NOAA_RNC/ImageServer/tile/{z}/{y}/{x}', {
-    attribution: 'NOAA Nautical Charts',
+  // Base map
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'OSM',
+    maxZoom: 18
+  }).addTo(chartMap);
+
+  // NOAA nautical chart overlay
+  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
+    attribution: 'NOAA',
     maxZoom: 16,
-    opacity: 1
+    opacity: 0.85
   }).addTo(chartMap);
 };
 
@@ -2469,9 +2476,15 @@ window.openCatchMap = function(idx) {
 
   catchMapInstance = L.map(container).setView([log.gps.lat, log.gps.lon], 14);
 
-  L.tileLayer('https://seamlessrnc.nauticalcharts.noaa.gov/arcgis/rest/services/RNC/NOAA_RNC/ImageServer/tile/{z}/{y}/{x}', {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'OSM',
+    maxZoom: 18
+  }).addTo(catchMapInstance);
+
+  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
     attribution: 'NOAA',
-    maxZoom: 16
+    maxZoom: 16,
+    opacity: 0.85
   }).addTo(catchMapInstance);
 
   var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
