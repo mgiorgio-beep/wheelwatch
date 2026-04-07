@@ -1288,7 +1288,19 @@ function renderBriefing(data) {
 
   html += '</div>';
 
-  document.getElementById('fi-content').innerHTML = html;
+  // Split: home content goes in grid, details go outside
+  var homeEnd = html.indexOf('<div id="fi-details">');
+  var homeHtml = html.substring(0, homeEnd);
+  var detailsHtml = html.substring(homeEnd);
+
+  document.getElementById('fi-content').innerHTML = homeHtml;
+
+  // Put details div as sibling after the grid
+  var existingDetails = document.getElementById('fi-details');
+  if (existingDetails) existingDetails.remove();
+  var detailsContainer = document.createElement('div');
+  detailsContainer.innerHTML = detailsHtml;
+  document.getElementById('fi-content').parentElement.appendChild(detailsContainer.firstChild);
   document.getElementById('fi-ts').textContent = 'Updated: ' + new Date().toLocaleString();
 
   // Draw charts after DOM update
@@ -2045,13 +2057,15 @@ window.navToggle = function() {
 
 window.navTo = function(id) {
   navToggle();
-  // Hide home, show details container
-  var home = document.getElementById('fi-home');
-  var details = document.getElementById('fi-details');
+  // Hide everything on home screen
+  var grid = document.getElementById('fi-content');
   var cuts = document.getElementById('fi-sec-cuts');
-  if (home) home.classList.add('hidden');
+  var header = document.querySelector('.fi-header');
+  var details = document.getElementById('fi-details');
+  if (grid) grid.style.display = 'none';
   if (cuts) cuts.style.display = 'none';
-  if (details) details.style.display = 'block';
+  if (header) header.style.display = 'none';
+  if (details) { details.style.display = 'block'; details.style.padding = '0 12px'; }
 
   // Hide all detail views, show the selected one
   document.querySelectorAll('.fi-detail-view').forEach(function(v) { v.classList.remove('active'); });
@@ -2084,13 +2098,15 @@ window.navTo = function(id) {
 };
 
 window.navBack = function() {
-  var home = document.getElementById('fi-home');
-  var details = document.getElementById('fi-details');
+  var grid = document.getElementById('fi-content');
   var cuts = document.getElementById('fi-sec-cuts');
-  if (details) details.style.display = 'none';
+  var header = document.querySelector('.fi-header');
+  var details = document.getElementById('fi-details');
+  if (details) { details.style.display = 'none'; details.style.padding = ''; }
   document.querySelectorAll('.fi-detail-view').forEach(function(v) { v.classList.remove('active'); });
-  if (home) home.classList.remove('hidden');
+  if (grid) grid.style.display = '';
   if (cuts) cuts.style.display = '';
+  if (header) header.style.display = '';
   window.scrollTo(0, 0);
 };
 
