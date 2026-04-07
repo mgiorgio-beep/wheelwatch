@@ -1228,6 +1228,7 @@ function renderBriefing(data) {
     '<option value="spot">By Spot</option>' +
     '<option value="species">By Species</option>' +
     '</select>' +
+    '<button id="catch-map-btn" onclick="openSelectedCatchMap()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;display:none;">🗺️ Map</button>' +
     '</div>' +
     '<div id="catch-history-list">' +
     '<div class="fi-loading"><div class="fi-spinner"></div> Loading catches...</div>' +
@@ -2000,11 +2001,14 @@ window.loadChart = function() {
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
 
   // NOAA ENC raster nautical charts with depth soundings
-  // NOAA ENC nautical chart with depths
-  L.esri.dynamicMapLayer({
-    url: 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer',
-    layers: [0,1,2,3,4,5,6,7],
-    attribution: 'NOAA ENC'
+  // OpenStreetMap base
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'OSM', maxZoom: 18
+  }).addTo(chartMap);
+
+  // OpenSeaMap nautical overlay (buoys, depths, channels)
+  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+    attribution: 'OpenSeaMap', maxZoom: 18, opacity: 1
   }).addTo(chartMap);
 };
 
@@ -2419,10 +2423,11 @@ function renderCatchList(logs) {
   sorted.forEach(function(log, idx) {
     var conds = log.conditions || {};
     var hasGps = log.gps && log.gps.lat && log.gps.lon;
-    var clickStyle = hasGps ? 'cursor:pointer;' : '';
-    var clickAttr = hasGps ? ' onclick="openCatchMap(' + idx + ')"' : '';
 
-    html += '<div style="padding:12px 0;border-bottom:1px solid var(--border);' + clickStyle + '"' + clickAttr + '>' +
+    html += '<div style="padding:12px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+      (hasGps ? '<input type="checkbox" class="catch-check" data-idx="' + idx + '" onchange="catchCheckChanged()" style="width:18px;height:18px;flex-shrink:0;">' : '<div style="width:18px;"></div>') +
+      '<div style="flex:1;' + (hasGps ? 'cursor:pointer;' : '') + '"' + (hasGps ? ' onclick="openCatchMap(' + idx + ')"' : '') + '>' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
       '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' +
       (hasGps ? '📍 ' : '') + (log.spot || 'Unknown spot') + '</div>' +
@@ -2451,10 +2456,61 @@ function renderCatchList(logs) {
     if (log.logged_by) {
       html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">by ' + log.logged_by + '</div>';
     }
-    html += '</div>';
+    html += '</div></div></div>';
   });
   list.innerHTML = html;
 }
+
+window.catchCheckChanged = function() {
+  var checked = document.querySelectorAll('.catch-check:checked');
+  var btn = document.getElementById('catch-map-btn');
+  if (btn) btn.style.display = checked.length > 0 ? 'block' : 'none';
+};
+
+window.openSelectedCatchMap = function() {
+  var checked = document.querySelectorAll('.catch-check:checked');
+  if (checked.length === 0) return;
+
+  var overlay = document.getElementById('catch-map-overlay');
+  overlay.style.display = 'block';
+  document.getElementById('catch-map-title').textContent = checked.length + ' Catch' + (checked.length > 1 ? 'es' : '') + ' on Chart';
+
+  var container = document.getElementById('catch-map-container');
+  if (catchMapInstance) { catchMapInstance.remove(); catchMapInstance = null; }
+
+  // Collect points
+  var points = [];
+  checked.forEach(function(cb) {
+    var idx = parseInt(cb.getAttribute('data-idx'));
+    var log = _catchLogs[idx];
+    if (log && log.gps && log.gps.lat && log.gps.lon) points.push({ log: log, lat: log.gps.lat, lon: log.gps.lon });
+  });
+
+  if (points.length === 0) { overlay.style.display = 'none'; return; }
+
+  var center = [points[0].lat, points[0].lon];
+  catchMapInstance = L.map(container).setView(center, 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM', maxZoom: 18 }).addTo(catchMapInstance);
+  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', { attribution: 'OpenSeaMap', maxZoom: 18 }).addTo(catchMapInstance);
+
+  var bounds = L.latLngBounds();
+  points.forEach(function(p) {
+    var popup = '<b>' + (p.log.spot || 'Catch') + '</b>';
+    if (p.log.species) popup += '<br>' + p.log.species;
+    if (p.log.lure) popup += '<br>' + p.log.lure;
+    if (p.log.date) popup += '<br><small>' + p.log.date + '</small>';
+    L.marker([p.lat, p.lon]).addTo(catchMapInstance).bindPopup(popup);
+    bounds.extend([p.lat, p.lon]);
+  });
+
+  if (points.length > 1) {
+    catchMapInstance.fitBounds(bounds, { padding: [40, 40] });
+  }
+
+  document.getElementById('catch-map-info').textContent = points.length + ' catch' + (points.length > 1 ? 'es' : '') + ' plotted';
+  setTimeout(function() { catchMapInstance.invalidateSize(); }, 200);
+};
 
 var catchMapInstance = null;
 
@@ -2487,10 +2543,11 @@ window.openCatchMap = function(idx) {
 
   catchMapInstance = L.map(container).setView([log.gps.lat, log.gps.lon], 14);
 
-  L.esri.dynamicMapLayer({
-    url: 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer',
-    layers: [0,1,2,3,4,5,6,7],
-    attribution: 'NOAA ENC'
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'OSM', maxZoom: 18
+  }).addTo(catchMapInstance);
+  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+    attribution: 'OpenSeaMap', maxZoom: 18, opacity: 1
   }).addTo(catchMapInstance);
 
   var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
