@@ -759,6 +759,7 @@ body {
 
 /* Detail sections hidden by default */
 #fi-details { display: none; }
+#fi-home.hidden { display: none !important; }
 #fi-details .fi-detail-view { display: none; }
 #fi-details .fi-detail-view.active { display: block; padding-bottom: 80px; }
 
@@ -1050,6 +1051,9 @@ body {
 
     <div class="catch-label">Notes (optional)</div>
     <textarea id="catch-notes" class="catch-input" rows="2" placeholder="Size, color, anything notable..."></textarea>
+
+    <div class="catch-label">Date &amp; Time</div>
+    <div class="catch-gps" id="catch-timestamp"></div>
 
     <div class="catch-label">GPS Location</div>
     <div class="catch-gps" id="catch-gps-status">Getting location...</div>
@@ -1964,18 +1968,11 @@ window.loadChart = function() {
 
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
 
-  // NOAA nautical chart raster tiles
-  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
-    attribution: 'NOAA',
-    maxZoom: 18,
+  // NOAA ENC raster nautical charts with depth soundings
+  L.tileLayer('https://seamlessrnc.nauticalcharts.noaa.gov/arcgis/rest/services/RNC/NOAA_RNC/ImageServer/tile/{z}/{y}/{x}', {
+    attribution: 'NOAA Nautical Charts',
+    maxZoom: 16,
     opacity: 1
-  }).addTo(chartMap);
-
-  // Add OpenStreetMap as fallback for areas without NOAA coverage
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '',
-    maxZoom: 18,
-    opacity: 0.3
   }).addTo(chartMap);
 };
 
@@ -2032,7 +2029,7 @@ window.navTo = function(id) {
   var home = document.getElementById('fi-home');
   var details = document.getElementById('fi-details');
   var cuts = document.getElementById('fi-sec-cuts');
-  if (home) home.style.display = 'none';
+  if (home) home.classList.add('hidden');
   if (cuts) cuts.style.display = 'none';
   if (details) details.style.display = 'block';
 
@@ -2072,7 +2069,7 @@ window.navBack = function() {
   var cuts = document.getElementById('fi-sec-cuts');
   if (details) details.style.display = 'none';
   document.querySelectorAll('.fi-detail-view').forEach(function(v) { v.classList.remove('active'); });
-  if (home) home.style.display = '';
+  if (home) home.classList.remove('hidden');
   if (cuts) cuts.style.display = '';
   window.scrollTo(0, 0);
 };
@@ -2549,6 +2546,7 @@ function catchResetForm() {
   document.getElementById('catch-lure').value = '';
   document.getElementById('catch-notes').value = '';
   document.getElementById('catch-gps-status').innerHTML = 'Getting location...';
+  document.getElementById('catch-timestamp').textContent = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
   document.getElementById('catch-save-btn').disabled = false;
   catchGps = null;
   // Clear chip selections
