@@ -967,6 +967,12 @@ function renderBriefing(data) {
   // ---- WIND TREND (observed + forecast) ----
   html += renderWindTrend(data.wind_history, data.weather);
 
+  // ---- WINDFINDER WIDGET ----
+  html += '<div class="fi-card fi-full"><div class="fi-card-header">' +
+    '<div class="fi-card-title">💨 Windfinder — Chatham Forecast</div>' +
+    '<span class="fi-badge fi-badge-ext">EXT</span></div>' +
+    '<div class="fi-card-body"><div id="windfinder-widget"></div></div></div>';
+
   // ---- WEATHER HOURLY ----
   html += renderWeatherHourly(data.weather);
 
@@ -998,6 +1004,16 @@ function renderBriefing(data) {
   if (window._lastWindPoints) {
     setTimeout(function() { drawWindChart(window._lastWindPoints); }, 150);
   }
+
+  // Load Windfinder widget
+  setTimeout(function() {
+    var wf = document.getElementById('windfinder-widget');
+    if (wf) {
+      var s = document.createElement('script');
+      s.src = 'https://www.windfinder.com/widget/forecast/js/chatham_cape_cod?unit_wave=ft&unit_rain=in&unit_temperature=f&unit_wind=kts';
+      wf.appendChild(s);
+    }
+  }, 200);
 }
 
 // ---- LUNAR / SOLUNAR ----
