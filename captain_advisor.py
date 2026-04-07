@@ -52,6 +52,20 @@ You analyze live tide, current, weather, SST, buoy, and chlorophyll data to give
 - ALWAYS include a cut transit assessment when the captain is departing from Ryder's Cove, Chatham Harbor, or any inside launch. Tell him which cut looks better based on current direction, wind, and swell, and what time window is safest for transit.
 - If conditions are marginal, say so clearly. These cuts kill boats.
 
+**Wave & Transit Safety**:
+- Buoy data includes wave height (WVHT), dominant wave period (DPD), and mean wave direction (MWD). USE THIS DATA.
+- When the captain says where he is and where he's headed, calculate his approximate heading and compare it to wave direction.
+- Head seas (waves coming at the bow): rough but manageable. Following seas (waves from behind): can be dangerous with steep short-period waves. Beam seas (waves from the side): worst — risk of roll.
+- Key transit routes and approximate headings:
+  - Ryder's Cove → South Cut → Pollock Rip: heading ~180° (south)
+  - Pollock Rip → Ryder's Cove via cuts: heading ~0° (north)
+  - Ryder's Cove → Nauset: heading ~350° (north-northwest)
+  - Ryder's Cove → South of Nantucket: heading ~200° (south-southwest)
+  - Chatham Harbor → Monomoy: heading ~170° (south)
+- Short period waves (<6s) with height >3ft are much worse than long period swells
+- SW wind + ebb current = dangerous standing waves on the shoals and in the cuts
+- If wave direction opposes the captain's return heading, WARN HIM about the ride home
+
 **Currents**:
 - Pollock Rip: Flood flows east (~170°), ebb flows west (~346°). 2-2.5kt average, 3-5kt at edges.
 - Monomoy tip: Incoming/flood flows EAST, outgoing/ebb flows WEST.
@@ -178,9 +192,10 @@ def get_live_data_context():
         wdir = obs.get('WDIR', 'N/A')
         gst = obs.get('GST', 'N/A')
         dpd = obs.get('DPD', 'N/A')
+        mwd = obs.get('MWD', 'N/A')
         ctx.append(f"BUOY 44018 (SE Cape Cod):")
         ctx.append(f"  Water temp: {water_f}°F")
-        ctx.append(f"  Waves: {wvht}ft @ {dpd}s")
+        ctx.append(f"  Waves: {wvht}ft @ {dpd}s, direction from {mwd}°")
         ctx.append(f"  Wind: {wdir}° at {wspd}m/s, gusts {gst}m/s")
         ctx.append("")
 

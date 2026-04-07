@@ -927,6 +927,10 @@ body {
     </div>
     <div class="advisor-input-area">
       <div class="advisor-input-row">
+        <button id="advisor-voice-btn"
+          ontouchstart="advisorVoiceStart(event)" ontouchend="advisorVoiceStop()"
+          onmousedown="advisorVoiceStart(event)" onmouseup="advisorVoiceStop()"
+          style="width:42px;height:42px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;touch-action:none;">🎤</button>
         <textarea id="advisor-input" class="advisor-input" rows="1"
           placeholder="Where and when are you heading out?"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();advisorSend();}"></textarea>
@@ -2123,6 +2127,48 @@ window.navBack = function() {
   if (header) header.style.display = '';
   window.scrollTo(0, 0);
 };
+
+// ==================== ADVISOR VOICE ====================
+var advisorRecognition = null;
+var advisorRecording = false;
+
+window.advisorVoiceStart = function(e) {
+  e.preventDefault();
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  advisorRecording = true;
+  var btn = document.getElementById('advisor-voice-btn');
+  btn.style.transform = 'scale(1.15)';
+  btn.style.boxShadow = '0 0 12px rgba(221,51,51,0.5)';
+
+  advisorRecognition = new SR();
+  advisorRecognition.continuous = true;
+  advisorRecognition.interimResults = false;
+  advisorRecognition.lang = 'en-US';
+  advisorRecognition.onresult = function(event) {
+    var t = '';
+    for (var i = 0; i < event.results.length; i++) t += event.results[i][0].transcript;
+    if (t.trim()) {
+      var input = document.getElementById('advisor-input');
+      input.value = input.value ? input.value + ' ' + t.trim() : t.trim();
+      advisorResize();
+    }
+  };
+  advisorRecognition.onerror = function() { advisorVoiceReset(); };
+  advisorRecognition.onend = function() { if (advisorRecording) advisorVoiceReset(); };
+  advisorRecognition.start();
+};
+
+window.advisorVoiceStop = function() {
+  advisorRecording = false;
+  if (advisorRecognition) advisorRecognition.stop();
+  advisorVoiceReset();
+};
+
+function advisorVoiceReset() {
+  var btn = document.getElementById('advisor-voice-btn');
+  if (btn) { btn.style.transform = ''; btn.style.boxShadow = ''; }
+}
 
 // ==================== CAPTAIN'S ADVISOR ====================
 var advisorHistory = [];
