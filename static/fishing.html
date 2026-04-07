@@ -985,6 +985,19 @@ body {
     <button class="catch-close" onclick="catchToggle()">&times;</button>
   </div>
   <div class="catch-body" id="catch-body">
+    <!-- VOICE RECORD -->
+    <div style="text-align:center;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+      <button id="catch-voice-btn"
+        ontouchstart="catchVoiceStart(event)" ontouchend="catchVoiceStop()"
+        onmousedown="catchVoiceStart(event)" onmouseup="catchVoiceStop()"
+        style="width:64px;height:64px;border-radius:50%;background:var(--bg-card);border:2px solid var(--border);
+               cursor:pointer;font-size:24px;display:inline-flex;align-items:center;justify-content:center;
+               transition:all .15s;touch-action:none;">
+        🎤
+      </button>
+      <div id="catch-voice-status" style="font-size:12px;color:var(--text-muted);margin-top:8px;">Hold to record your catch</div>
+    </div>
+
     <div class="catch-label">Spot</div>
     <div class="catch-chips" id="catch-spot-chips">
       <button class="catch-chip" onclick="catchPickSpot(this)">Monomoy</button>
@@ -1839,6 +1852,9 @@ window.suggestOpen = function() {
   box.style.cssText = 'background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;width:90%;max-width:380px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.15);';
   box.innerHTML = '<div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">💬 Send a Suggestion</div>' +
     '<textarea id="suggest-text" style="width:100%;min-height:100px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text-primary);font-family:inherit;font-size:14px;resize:none;outline:none;box-sizing:border-box;" placeholder="What would make Wheelhouse better?"></textarea>' +
+    '<div style="text-align:center;margin-top:8px;">' +
+    '<button id="suggest-voice-btn" ontouchstart="suggestVoiceStart(event)" ontouchend="suggestVoiceStop()" onmousedown="suggestVoiceStart(event)" onmouseup="suggestVoiceStop()" style="width:44px;height:44px;border-radius:50%;background:var(--bg-card);border:1px solid var(--border);cursor:pointer;font-size:18px;touch-action:none;">🎤</button>' +
+    '<div id="suggest-voice-status" style="font-size:11px;color:var(--text-muted);margin-top:4px;">Hold to dictate</div></div>' +
     '<div style="display:flex;gap:8px;margin-top:12px;">' +
     '<button onclick="document.getElementById(\'suggest-overlay\').remove()" style="flex:1;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>' +
     '<button id="suggest-send-btn" onclick="suggestSend()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">Send</button>' +
@@ -1871,6 +1887,53 @@ window.suggestSend = function() {
     btn.disabled = false;
   });
 };
+
+// ==================== SUGGESTION VOICE ====================
+var suggestRecognition = null;
+var suggestRecording = false;
+
+window.suggestVoiceStart = function(e) {
+  e.preventDefault();
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { document.getElementById('suggest-voice-status').textContent = 'Voice not supported'; return; }
+  suggestRecording = true;
+  var btn = document.getElementById('suggest-voice-btn');
+  btn.style.background = 'var(--red)';
+  btn.style.borderColor = 'var(--red)';
+  document.getElementById('suggest-voice-status').textContent = 'Listening...';
+
+  suggestRecognition = new SR();
+  suggestRecognition.continuous = true;
+  suggestRecognition.interimResults = false;
+  suggestRecognition.lang = 'en-US';
+  suggestRecognition.onresult = function(event) {
+    var t = '';
+    for (var i = 0; i < event.results.length; i++) t += event.results[i][0].transcript;
+    if (t.trim()) {
+      var ta = document.getElementById('suggest-text');
+      ta.value = ta.value ? ta.value + ' ' + t.trim() : t.trim();
+    }
+  };
+  suggestRecognition.onerror = function() {
+    document.getElementById('suggest-voice-status').textContent = 'Error — try again';
+    suggestVoiceReset();
+  };
+  suggestRecognition.onend = function() { if (suggestRecording) suggestVoiceReset(); };
+  suggestRecognition.start();
+};
+
+window.suggestVoiceStop = function() {
+  suggestRecording = false;
+  if (suggestRecognition) suggestRecognition.stop();
+  suggestVoiceReset();
+};
+
+function suggestVoiceReset() {
+  var btn = document.getElementById('suggest-voice-btn');
+  if (btn) { btn.style.background = 'var(--bg-card)'; btn.style.borderColor = 'var(--border)'; }
+  var st = document.getElementById('suggest-voice-status');
+  if (st) st.textContent = 'Hold to dictate';
+}
 
 // ==================== NAUTICAL CHART ====================
 var chartMap = null;
@@ -2258,6 +2321,151 @@ window.condClose = function() {
   document.getElementById('cond-popup').classList.remove('open');
   document.getElementById('cond-popup-overlay').classList.remove('open');
 };
+
+// ==================== CATCH VOICE RECORDING ====================
+var catchRecognition = null;
+var catchRecording = false;
+
+window.catchVoiceStart = function(e) {
+  e.preventDefault();
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    document.getElementById('catch-voice-status').textContent = 'Voice not supported on this browser';
+    return;
+  }
+  catchRecording = true;
+  var btn = document.getElementById('catch-voice-btn');
+  btn.style.background = 'var(--red)';
+  btn.style.borderColor = 'var(--red)';
+  btn.style.transform = 'scale(1.1)';
+  document.getElementById('catch-voice-status').textContent = 'Listening...';
+
+  catchRecognition = new SR();
+  catchRecognition.continuous = true;
+  catchRecognition.interimResults = false;
+  catchRecognition.lang = 'en-US';
+
+  catchRecognition.onresult = function(event) {
+    var transcript = '';
+    for (var i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    if (transcript.trim()) {
+      catchVoiceParse(transcript.trim());
+    }
+  };
+
+  catchRecognition.onerror = function(e) {
+    document.getElementById('catch-voice-status').textContent = 'Error: ' + e.error + ' — try again';
+    catchVoiceReset();
+  };
+
+  catchRecognition.onend = function() {
+    if (catchRecording) catchVoiceReset();
+  };
+
+  catchRecognition.start();
+};
+
+window.catchVoiceStop = function() {
+  catchRecording = false;
+  if (catchRecognition) {
+    catchRecognition.stop();
+  }
+  catchVoiceReset();
+};
+
+function catchVoiceReset() {
+  var btn = document.getElementById('catch-voice-btn');
+  btn.style.background = 'var(--bg-card)';
+  btn.style.borderColor = 'var(--border)';
+  btn.style.transform = '';
+}
+
+function catchVoiceParse(text) {
+  document.getElementById('catch-voice-status').innerHTML =
+    '<span style="color:var(--green);">Got it!</span> Filling in form...';
+
+  // Put raw transcript in notes
+  var notes = document.getElementById('catch-notes');
+  notes.value = text;
+
+  // Try to match species
+  var speciesMap = {
+    'striper': 'Striped Bass', 'striped bass': 'Striped Bass', 'bass': 'Striped Bass',
+    'blue': 'Bluefish', 'bluefish': 'Bluefish', 'blues': 'Bluefish',
+    'albie': 'False Albacore', 'albies': 'False Albacore', 'false albacore': 'False Albacore', 'albacore': 'False Albacore',
+    'bonito': 'Bonito',
+    'fluke': 'Fluke',
+    'sea bass': 'Black Sea Bass', 'black sea bass': 'Black Sea Bass',
+    'tuna': 'Tuna'
+  };
+  var lower = text.toLowerCase();
+  for (var key in speciesMap) {
+    if (lower.indexOf(key) !== -1) {
+      document.getElementById('catch-species').value = speciesMap[key];
+      break;
+    }
+  }
+
+  // Try to match technique
+  var techMap = {
+    'casting': 'Casting', 'cast': 'Casting',
+    'trolling': 'Trolling', 'troll': 'Trolling',
+    'jigging': 'Jigging', 'jig': 'Jigging',
+    'live bait': 'Live Bait', 'bait': 'Live Bait',
+    'fly': 'Fly',
+    'drifting': 'Drifting', 'drift': 'Drifting'
+  };
+  for (var key in techMap) {
+    if (lower.indexOf(key) !== -1) {
+      document.getElementById('catch-technique').value = techMap[key];
+      break;
+    }
+  }
+
+  // Try to match lure/bait
+  var lureMap = {
+    'bucktail': 'White Bucktail', 'white bucktail': 'White Bucktail',
+    'slug': 'Slug-Go', 'sluggo': 'Slug-Go', 'slug-go': 'Slug-Go',
+    'eel': 'Live Eel', 'live eel': 'Live Eel',
+    'chunk': 'Chunk',
+    'diamond jig': 'Diamond Jig', 'diamond': 'Diamond Jig',
+    'popper': 'Popper',
+    'sp minnow': 'SP Minnow', 'minnow': 'SP Minnow'
+  };
+  for (var key in lureMap) {
+    if (lower.indexOf(key) !== -1) {
+      document.getElementById('catch-lure').value = lureMap[key];
+      // Highlight matching chip
+      document.querySelectorAll('#catch-lure-chips .catch-chip').forEach(function(c) {
+        c.classList.toggle('selected', c.textContent === lureMap[key]);
+      });
+      break;
+    }
+  }
+
+  // Try to match spot
+  var spotMap = {
+    'monomoy': 'Monomoy', 'pollock rip': 'Pollock Rip', 'pollock': 'Pollock Rip',
+    'chatham bars': 'Chatham Bars', 'handkerchief': 'Handkerchief',
+    'nauset': 'Nauset Beach', 'nantucket': 'South of Nantucket',
+    'outside the cuts': 'Outside the Cuts', 'cuts': 'Outside the Cuts'
+  };
+  for (var key in spotMap) {
+    if (lower.indexOf(key) !== -1) {
+      document.getElementById('catch-spot').value = spotMap[key];
+      document.querySelectorAll('#catch-spot-chips .catch-chip').forEach(function(c) {
+        c.classList.toggle('selected', c.textContent === spotMap[key]);
+      });
+      break;
+    }
+  }
+
+  setTimeout(function() {
+    document.getElementById('catch-voice-status').textContent = 'Hold to record again, or edit below';
+  }, 2000);
+}
 
 // ==================== CATCH LOGGING ====================
 var catchOpen = false;
