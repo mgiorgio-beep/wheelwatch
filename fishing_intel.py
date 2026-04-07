@@ -191,27 +191,34 @@ def get_weather():
 # ==================== BUOY DATA ====================
 
 def get_buoy(station='44018'):
-    """Get latest observations from NDBC buoy (44018 = SE Cape Cod)."""
+    """Get latest observations from NDBC buoy. Falls back to 44020 if primary is down."""
     def fetch():
-        url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        lines = r.text.strip().split('\n')
-        if len(lines) < 3:
-            return None
-        headers = lines[0].replace('#', '').split()
-        # Skip the units line (line 1)
-        latest = lines[2].split()
-        obs = {}
-        for i, h in enumerate(headers):
-            if i < len(latest):
-                val = latest[i]
-                obs[h] = None if val == 'MM' else val
-        return {
-            'station': station,
-            'observation': obs,
-            'fetched': datetime.now().isoformat(),
-        }
+        # Try primary station, fall back to alternates
+        stations_to_try = [station, '44020', '44090']
+        for stn in stations_to_try:
+            try:
+                url = f'https://www.ndbc.noaa.gov/data/realtime2/{stn}.txt'
+                r = requests.get(url, timeout=10)
+                r.raise_for_status()
+                lines = r.text.strip().split('\n')
+                if len(lines) < 3:
+                    continue
+                headers = lines[0].replace('#', '').split()
+                latest = lines[2].split()
+                obs = {}
+                for i, h in enumerate(headers):
+                    if i < len(latest):
+                        val = latest[i]
+                        obs[h] = None if val == 'MM' else val
+                return {
+                    'station': stn,
+                    'observation': obs,
+                    'fetched': datetime.now().isoformat(),
+                }
+            except Exception as e:
+                logger.warning(f'Buoy {stn} failed: {e}, trying next...')
+                continue
+        return None
     return _cached(f'buoy_{station}', 'buoy', fetch)
 
 
