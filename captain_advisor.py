@@ -316,6 +316,69 @@ Current conditions:
             logger.error(f'Cuts analysis error: {e}')
             return jsonify({'error': str(e)}), 500
 
+    # ---- Voice Catch Parsing ----
+    @app.route('/api/fishing/parse-catch', methods=['POST'])
+    @login_required
+    def api_parse_catch():
+        """Use AI to parse a voice transcript into catch log fields."""
+        data = request.get_json()
+        transcript = data.get('transcript', '').strip() if data else ''
+        if not transcript:
+            return jsonify({'error': 'No transcript'}), 400
+        if not ANTHROPIC_API_KEY:
+            return jsonify({'error': 'API key not configured'}), 500
+
+        parse_prompt = f"""Parse this fishing catch report into structured fields. Extract whatever you can. If a field isn't mentioned, leave it as empty string.
+
+Transcript: "{transcript}"
+
+Respond with ONLY valid JSON, no markdown, no explanation:
+{{
+  "spot": "",
+  "species": "",
+  "technique": "",
+  "lure": "",
+  "notes": ""
+}}
+
+Rules:
+- spot: The fishing location mentioned. Use it exactly as spoken — don't normalize to a known list.
+- species: Match to one of: Striped Bass, Bluefish, False Albacore, Bonito, Fluke, Black Sea Bass, Tuna. "Striper" = Striped Bass, "blues" = Bluefish, "albies" = False Albacore. If no match, use what they said.
+- technique: Match to one of: Casting, Trolling, Jigging, Live Bait, Fly, Drifting. If no match, use what they said.
+- lure: Match to one of: White Bucktail, Slug-Go, Live Eel, Chunk, Diamond Jig, Popper, SP Minnow. If no match, use what they said.
+- notes: Everything else — size, weight, color, conditions, anything descriptive. Include the full transcript here as well."""
+
+        try:
+            r = requests.post(
+                ANTHROPIC_URL,
+                headers={
+                    'Content-Type': 'application/json',
+                    'x-api-key': ANTHROPIC_API_KEY,
+                    'anthropic-version': '2023-06-01',
+                },
+                json={
+                    'model': MODEL,
+                    'max_tokens': 300,
+                    'messages': [{'role': 'user', 'content': parse_prompt}],
+                },
+                timeout=15,
+            )
+            r.raise_for_status()
+            resp_data = r.json()
+            text = ''
+            for block in resp_data.get('content', []):
+                if block.get('type') == 'text':
+                    text += block['text']
+            parsed = json.loads(text.strip())
+            return jsonify(parsed)
+        except Exception as e:
+            logger.error(f'Catch parse error: {e}')
+            # Fallback: just put everything in notes
+            return jsonify({
+                'spot': '', 'species': '', 'technique': '',
+                'lure': '', 'notes': transcript
+            })
+
     # ---- Save / List / View Logs ----
     import glob as globmod
 

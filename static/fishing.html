@@ -990,9 +990,9 @@ body {
       <button id="catch-voice-btn"
         ontouchstart="catchVoiceStart(event)" ontouchend="catchVoiceStop()"
         onmousedown="catchVoiceStart(event)" onmouseup="catchVoiceStop()"
-        style="width:64px;height:64px;border-radius:50%;background:var(--bg-card);border:2px solid var(--border);
+        style="width:64px;height:64px;border-radius:50%;background:var(--red);border:2px solid var(--red);
                cursor:pointer;font-size:24px;display:inline-flex;align-items:center;justify-content:center;
-               transition:all .15s;touch-action:none;">
+               transition:all .15s;touch-action:none;color:#fff;box-shadow:0 2px 10px rgba(221,51,51,0.3);">
         🎤
       </button>
       <div id="catch-voice-status" style="font-size:12px;color:var(--text-muted);margin-top:8px;">Hold to record your catch</div>
@@ -2384,87 +2384,82 @@ function catchVoiceReset() {
 
 function catchVoiceParse(text) {
   document.getElementById('catch-voice-status').innerHTML =
-    '<span style="color:var(--green);">Got it!</span> Filling in form...';
+    '<span style="color:var(--green);">Got it!</span> Parsing with AI...';
 
-  // Put raw transcript in notes
-  var notes = document.getElementById('catch-notes');
-  notes.value = text;
-
-  // Try to match species
-  var speciesMap = {
-    'striper': 'Striped Bass', 'striped bass': 'Striped Bass', 'bass': 'Striped Bass',
-    'blue': 'Bluefish', 'bluefish': 'Bluefish', 'blues': 'Bluefish',
-    'albie': 'False Albacore', 'albies': 'False Albacore', 'false albacore': 'False Albacore', 'albacore': 'False Albacore',
-    'bonito': 'Bonito',
-    'fluke': 'Fluke',
-    'sea bass': 'Black Sea Bass', 'black sea bass': 'Black Sea Bass',
-    'tuna': 'Tuna'
-  };
-  var lower = text.toLowerCase();
-  for (var key in speciesMap) {
-    if (lower.indexOf(key) !== -1) {
-      document.getElementById('catch-species').value = speciesMap[key];
-      break;
+  fetch('/api/fishing/parse-catch', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ transcript: text })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    // Fill species
+    if (data.species) {
+      var sel = document.getElementById('catch-species');
+      // Check if it's a known option
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].text === data.species) { sel.value = data.species; found = true; break; }
+      }
+      if (!found && data.species) {
+        // Add as new option
+        var opt = document.createElement('option');
+        opt.text = data.species; opt.value = data.species;
+        sel.add(opt);
+        sel.value = data.species;
+      }
     }
-  }
 
-  // Try to match technique
-  var techMap = {
-    'casting': 'Casting', 'cast': 'Casting',
-    'trolling': 'Trolling', 'troll': 'Trolling',
-    'jigging': 'Jigging', 'jig': 'Jigging',
-    'live bait': 'Live Bait', 'bait': 'Live Bait',
-    'fly': 'Fly',
-    'drifting': 'Drifting', 'drift': 'Drifting'
-  };
-  for (var key in techMap) {
-    if (lower.indexOf(key) !== -1) {
-      document.getElementById('catch-technique').value = techMap[key];
-      break;
+    // Fill technique
+    if (data.technique) {
+      var tSel = document.getElementById('catch-technique');
+      var tFound = false;
+      for (var i = 0; i < tSel.options.length; i++) {
+        if (tSel.options[i].text === data.technique) { tSel.value = data.technique; tFound = true; break; }
+      }
+      if (!tFound) {
+        var opt = document.createElement('option');
+        opt.text = data.technique; opt.value = data.technique;
+        tSel.add(opt);
+        tSel.value = data.technique;
+      }
     }
-  }
 
-  // Try to match lure/bait
-  var lureMap = {
-    'bucktail': 'White Bucktail', 'white bucktail': 'White Bucktail',
-    'slug': 'Slug-Go', 'sluggo': 'Slug-Go', 'slug-go': 'Slug-Go',
-    'eel': 'Live Eel', 'live eel': 'Live Eel',
-    'chunk': 'Chunk',
-    'diamond jig': 'Diamond Jig', 'diamond': 'Diamond Jig',
-    'popper': 'Popper',
-    'sp minnow': 'SP Minnow', 'minnow': 'SP Minnow'
-  };
-  for (var key in lureMap) {
-    if (lower.indexOf(key) !== -1) {
-      document.getElementById('catch-lure').value = lureMap[key];
-      // Highlight matching chip
+    // Fill lure
+    if (data.lure) {
+      document.getElementById('catch-lure').value = data.lure;
       document.querySelectorAll('#catch-lure-chips .catch-chip').forEach(function(c) {
-        c.classList.toggle('selected', c.textContent === lureMap[key]);
+        c.classList.toggle('selected', c.textContent === data.lure);
       });
-      break;
     }
-  }
 
-  // Try to match spot
-  var spotMap = {
-    'monomoy': 'Monomoy', 'pollock rip': 'Pollock Rip', 'pollock': 'Pollock Rip',
-    'chatham bars': 'Chatham Bars', 'handkerchief': 'Handkerchief',
-    'nauset': 'Nauset Beach', 'nantucket': 'South of Nantucket',
-    'outside the cuts': 'Outside the Cuts', 'cuts': 'Outside the Cuts'
-  };
-  for (var key in spotMap) {
-    if (lower.indexOf(key) !== -1) {
-      document.getElementById('catch-spot').value = spotMap[key];
+    // Fill spot
+    if (data.spot) {
+      document.getElementById('catch-spot').value = data.spot;
+      // Highlight matching chip or leave as custom text
+      var spotMatched = false;
       document.querySelectorAll('#catch-spot-chips .catch-chip').forEach(function(c) {
-        c.classList.toggle('selected', c.textContent === spotMap[key]);
+        if (c.textContent.toLowerCase() === data.spot.toLowerCase()) {
+          c.classList.add('selected');
+          spotMatched = true;
+        } else {
+          c.classList.remove('selected');
+        }
       });
-      break;
     }
-  }
 
-  setTimeout(function() {
+    // Fill notes
+    if (data.notes) {
+      document.getElementById('catch-notes').value = data.notes;
+    }
+
     document.getElementById('catch-voice-status').textContent = 'Hold to record again, or edit below';
-  }, 2000);
+  })
+  .catch(function() {
+    // Fallback: just put in notes
+    document.getElementById('catch-notes').value = text;
+    document.getElementById('catch-voice-status').textContent = 'Couldn\'t parse — added to notes. Edit below.';
+  });
 }
 
 // ==================== CATCH LOGGING ====================
