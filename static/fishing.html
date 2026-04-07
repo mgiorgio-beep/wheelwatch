@@ -1049,8 +1049,94 @@ function isUpcoming(s) {
 }
 
 // ==================== RENDER ====================
+function renderQuickLook(data) {
+  // Pull key numbers
+  var wind = '--', gust = '', windDir = '--', waterTemp = '--', waveHt = '--', wavePd = '--';
+  if (data.buoy && data.buoy.observation) {
+    var obs = data.buoy.observation;
+    if (obs.WSPD) wind = (parseFloat(obs.WSPD) * 1.944).toFixed(0);
+    if (obs.GST) gust = (parseFloat(obs.GST) * 1.944).toFixed(0);
+    if (obs.WDIR) windDir = obs.WDIR;
+    if (obs.WTMP) waterTemp = (parseFloat(obs.WTMP) * 9/5 + 32).toFixed(0);
+    if (obs.WVHT) waveHt = parseFloat(obs.WVHT).toFixed(1);
+    if (obs.DPD) wavePd = parseFloat(obs.DPD).toFixed(0);
+  }
+
+  // Next tide
+  var nextTide = '';
+  if (data.tides) {
+    for (var key in data.tides) {
+      var t = data.tides[key];
+      if (!t || !t.predictions) continue;
+      var upcoming = t.predictions.filter(function(p) {
+        try { return new Date(p.t.replace(' ', 'T')) > new Date(); } catch(e) { return true; }
+      });
+      if (upcoming.length > 0) {
+        var p = upcoming[0];
+        var isH = p.type === 'H';
+        var tTime = new Date(p.t.replace(' ', 'T'));
+        nextTide = (isH ? '▲ High' : '▼ Low') + ' ' + parseFloat(p.v).toFixed(1) + 'ft @ ' +
+          tTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+        break;
+      }
+    }
+  }
+
+  // Next current
+  var nextCurrent = '';
+  if (data.currents && data.currents.chatham_roads) {
+    var cr = data.currents.chatham_roads;
+    if (cr && cr.predictions) {
+      var upCur = cr.predictions.filter(function(p) {
+        try { return new Date(p.Time.replace(' ', 'T')) > new Date(); } catch(e) { return true; }
+      });
+      if (upCur.length > 0) {
+        var c = upCur[0];
+        var cType = c.Type === 'flood' ? '↗ Flood' : c.Type === 'ebb' ? '↙ Ebb' : 'Slack';
+        var cVel = c.Velocity_Major ? parseFloat(c.Velocity_Major).toFixed(1) + 'kt' : '';
+        var cTime = new Date(c.Time.replace(' ', 'T'));
+        nextCurrent = cType + ' ' + cVel + ' @ ' +
+          cTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+      }
+    }
+  }
+
+  // Lunar
+  var lunar = '';
+  if (data.lunar) {
+    lunar = (data.lunar.phase_icon || '🌙') + ' ' + (data.lunar.phase_name || '') +
+      ' · ' + (data.lunar.rating || '');
+  }
+
+  // Weather short
+  var wxShort = '';
+  if (data.weather && data.weather.hourly && data.weather.hourly.length > 0) {
+    var h = data.weather.hourly[0];
+    wxShort = (h.shortForecast || '') + ', ' + h.temperature + '°F';
+  }
+
+  return '<div id="fi-sec-quicklook" class="fi-card fi-full" style="border-color:var(--accent);">' +
+    '<div class="fi-card-header"><div class="fi-card-title">⚓ Quick Look</div>' +
+    '<span class="fi-badge fi-badge-live">NOW</span></div>' +
+    '<div class="fi-card-body">' +
+    '<div class="fi-buoy-grid">' +
+    buoyItem(wind + (gust ? '/' + gust : '') + ' kt', windDir + '° WIND') +
+    buoyItem(waterTemp + '°F', 'WATER') +
+    buoyItem(waveHt + 'ft / ' + wavePd + 's', 'WAVES') +
+    '</div>' +
+    '<div style="margin-top:12px;">' +
+    (nextTide ? '<div class="fi-row"><span class="fi-row-label">Next Tide</span><span class="fi-row-value" style="font-size:12px;">' + nextTide + '</span></div>' : '') +
+    (nextCurrent ? '<div class="fi-row"><span class="fi-row-label">Chatham Roads</span><span class="fi-row-value" style="font-size:12px;">' + nextCurrent + '</span></div>' : '') +
+    (lunar ? '<div class="fi-row"><span class="fi-row-label">Moon</span><span class="fi-row-value" style="font-size:12px;">' + lunar + '</span></div>' : '') +
+    (wxShort ? '<div class="fi-row"><span class="fi-row-label">Now</span><span class="fi-row-value" style="font-size:12px;">' + wxShort + '</span></div>' : '') +
+    '</div></div></div>';
+}
+
 function renderBriefing(data) {
   var html = '';
+
+  // ---- HERO: QUICK LOOK ----
+  html += renderQuickLook(data);
 
   html += '<div id="fi-sec-lunar">' + renderLunar(data.lunar) + '</div>';
   html += '<div id="fi-sec-buoy">' + renderBuoy(data.buoy) + '</div>';
