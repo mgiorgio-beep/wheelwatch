@@ -1995,7 +1995,14 @@ window.loadChart = function() {
 
   if (chartMap) {
     chartMap.setView([lat, lon], zoom);
+    setTimeout(function() { chartMap.invalidateSize(); }, 100);
     return;
+  }
+
+  // Destroy any old map instance on this container
+  if (container._leaflet_id) {
+    container._leaflet_id = null;
+    container.innerHTML = '';
   }
 
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
@@ -2088,8 +2095,10 @@ window.navTo = function(id) {
       loadCatchHistory();
     }
     if (id === 'fi-sec-charts') {
-      loadChart();
-      setTimeout(function() { if (chartMap) chartMap.invalidateSize(); }, 200);
+      setTimeout(function() {
+        loadChart();
+        setTimeout(function() { if (chartMap) chartMap.invalidateSize(); }, 300);
+      }, 100);
     }
     if (id === 'fi-sec-windfinder') {
       var wf = document.getElementById('windfinder-widget');
@@ -2425,8 +2434,8 @@ function renderCatchList(logs) {
     var conds = log.conditions || {};
     var hasGps = log.gps && log.gps.lat && log.gps.lon;
 
-    html += '<div style="padding:12px 0;border-bottom:1px solid var(--border);">' +
-      '<div style="display:flex;align-items:center;gap:10px;">' +
+    html += '<div class="catch-row" data-filename="' + (log.filename || '') + '" style="padding:12px 0;border-bottom:1px solid var(--border);position:relative;overflow:hidden;">' +
+      '<div class="catch-row-inner" style="display:flex;align-items:center;gap:10px;transition:transform .2s;position:relative;">' +
       (hasGps ? '<input type="checkbox" class="catch-check" data-idx="' + idx + '" onchange="catchCheckChanged()" style="width:18px;height:18px;flex-shrink:0;">' : '<div style="width:18px;"></div>') +
       '<div style="flex:1;' + (hasGps ? 'cursor:pointer;' : '') + '"' + (hasGps ? ' onclick="openCatchMap(' + idx + ')"' : '') + '>' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
@@ -2457,7 +2466,9 @@ function renderCatchList(logs) {
     if (log.logged_by) {
       html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">by ' + log.logged_by + '</div>';
     }
-    html += '</div></div></div>';
+    html += '</div></div>' +
+      '<div class="catch-delete-btn" style="position:absolute;right:0;top:0;bottom:0;width:70px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer;transform:translateX(70px);transition:transform .2s;" onclick="deleteCatch(this)">Delete</div>' +
+      '</div>';
   });
   list.innerHTML = html;
 }
@@ -2499,11 +2510,14 @@ window.openSelectedCatchMap = function() {
 
   var bounds = L.latLngBounds();
   points.forEach(function(p) {
-    var popup = '<b>' + (p.log.spot || 'Catch') + '</b>';
-    if (p.log.species) popup += '<br>' + p.log.species;
-    if (p.log.lure) popup += '<br>' + p.log.lure;
-    if (p.log.date) popup += '<br><small>' + p.log.date + '</small>';
-    L.marker([p.lat, p.lon]).addTo(catchMapInstance).bindPopup(popup);
+    var cn = p.log.conditions || {};
+    var popup = '<div style="min-width:140px;"><b style="font-size:13px;">' + (p.log.spot || 'Catch') + '</b>';
+    if (p.log.species) popup += '<br><span style="color:#0077aa;font-weight:600;">' + p.log.species + '</span>';
+    if (p.log.lure) popup += ' · ' + p.log.lure;
+    if (p.log.date) popup += '<br><small style="color:#666;">' + p.log.date + '</small>';
+    if (cn.water_temp || cn.tide_phase) popup += '<br><small style="color:#888;">' + [cn.water_temp, cn.tide_phase].filter(Boolean).join(' · ') + '</small>';
+    popup += '</div>';
+    L.marker([p.lat, p.lon], {icon: redIcon}).addTo(catchMapInstance).bindPopup(popup, { maxWidth: 220 });
     bounds.extend([p.lat, p.lon]);
   });
 
@@ -2516,6 +2530,11 @@ window.openSelectedCatchMap = function() {
 };
 
 var catchMapInstance = null;
+var redIcon = L.icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+});
 
 window.openCatchMap = function(idx) {
   var logs = _catchLogs;
@@ -2554,14 +2573,21 @@ window.openCatchMap = function(idx) {
     attribution: 'NOAA ENC', maxZoom: 18
   }).addTo(catchMapInstance);
 
-  var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
-  if (log.species) popupText += '<br>' + log.species;
-  if (log.lure) popupText += '<br>' + log.lure;
-  if (log.date) popupText += '<br><small>' + log.date + '</small>';
+  var conds = log.conditions || {};
+  var popupText = '<div style="min-width:160px;"><b style="font-size:13px;">' + (log.spot || 'Catch') + '</b>';
+  if (log.species) popupText += '<br><span style="color:#0077aa;font-weight:600;">' + log.species + '</span>';
+  if (log.lure) popupText += ' · ' + log.lure;
+  if (log.technique) popupText += ' · ' + log.technique;
+  if (log.date) popupText += '<br><small style="color:#666;">' + log.date + '</small>';
+  if (conds.water_temp || conds.tide_phase) popupText += '<br><small style="color:#888;">' + [conds.water_temp, conds.tide_phase].filter(Boolean).join(' · ') + '</small>';
+  if (conds.wind) popupText += '<br><small style="color:#888;">' + conds.wind + '</small>';
+  if (log.notes) popupText += '<br><small style="color:#555;font-style:italic;">' + (log.notes.length > 80 ? log.notes.substring(0, 80) + '...' : log.notes) + '</small>';
+  if (log.logged_by) popupText += '<br><small style="color:#999;">by ' + log.logged_by + '</small>';
+  popupText += '</div>';
 
-  L.marker([log.gps.lat, log.gps.lon])
+  L.marker([log.gps.lat, log.gps.lon], {icon: redIcon})
     .addTo(catchMapInstance)
-    .bindPopup(popupText)
+    .bindPopup(popupText, { maxWidth: 250 })
     .openPopup();
 
   setTimeout(function() { catchMapInstance.invalidateSize(); }, 200);
@@ -2573,6 +2599,80 @@ window.closeCatchMap = function() {
     catchMapInstance.remove();
     catchMapInstance = null;
   }
+};
+
+// ==================== CATCH SWIPE TO DELETE ====================
+(function() {
+  var startX = 0, currentRow = null, swiping = false;
+
+  document.addEventListener('touchstart', function(e) {
+    var row = e.target.closest('.catch-row');
+    if (!row) return;
+    startX = e.touches[0].clientX;
+    currentRow = row;
+    swiping = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!currentRow) return;
+    var dx = e.touches[0].clientX - startX;
+    if (dx < -20) swiping = true;
+    if (!swiping) return;
+    dx = Math.max(dx, -70);
+    dx = Math.min(dx, 0);
+    var inner = currentRow.querySelector('.catch-row-inner');
+    var del = currentRow.querySelector('.catch-delete-btn');
+    if (inner) inner.style.transform = 'translateX(' + dx + 'px)';
+    if (del) del.style.transform = 'translateX(' + (70 + dx) + 'px)';
+  }, { passive: true });
+
+  document.addEventListener('touchend', function() {
+    if (!currentRow) return;
+    var inner = currentRow.querySelector('.catch-row-inner');
+    var del = currentRow.querySelector('.catch-delete-btn');
+    if (swiping) {
+      // Snap open
+      if (inner) inner.style.transform = 'translateX(-70px)';
+      if (del) del.style.transform = 'translateX(0)';
+    } else {
+      // Snap closed
+      if (inner) inner.style.transform = '';
+      if (del) del.style.transform = '';
+    }
+    currentRow = null;
+    swiping = false;
+  });
+
+  // Close any open rows when tapping elsewhere
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.catch-delete-btn')) return;
+    document.querySelectorAll('.catch-row-inner').forEach(function(el) { el.style.transform = ''; });
+    document.querySelectorAll('.catch-delete-btn').forEach(function(el) { el.style.transform = ''; });
+  });
+})();
+
+window.deleteCatch = function(btn) {
+  var row = btn.closest('.catch-row');
+  var filename = row ? row.getAttribute('data-filename') : '';
+  if (!filename) return;
+
+  btn.textContent = '...';
+  fetch('/api/fishing/log/' + filename, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.deleted) {
+        row.style.transition = 'opacity .3s, max-height .3s';
+        row.style.opacity = '0';
+        row.style.maxHeight = '0';
+        row.style.overflow = 'hidden';
+        setTimeout(function() { row.remove(); }, 300);
+        // Clear cached logs so next load fetches fresh
+        _catchLogs = [];
+      } else {
+        btn.textContent = 'Error';
+      }
+    })
+    .catch(function() { btn.textContent = 'Error'; });
 };
 
 // ==================== CATCH VOICE RECORDING ====================

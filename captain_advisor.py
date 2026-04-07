@@ -609,6 +609,7 @@ Rules:
                     entry = json.load(f)
                 dt = datetime.fromisoformat(entry['timestamp'])
                 logs.append({
+                    'filename': os.path.basename(fp),
                     'date': dt.strftime('%b %d, %Y %I:%M %p'),
                     'logged_by': entry.get('logged_by', ''),
                     'spot': entry.get('spot', ''),
@@ -622,5 +623,18 @@ Rules:
             except Exception as e:
                 logger.error(f'Error reading catch log {fp}: {e}')
         return jsonify({'logs': logs})
+
+    @app.route('/api/fishing/log/<filename>', methods=['DELETE'])
+    @login_required
+    def api_catch_delete(filename):
+        # Only allow deleting catch_*.json files
+        if not filename.startswith('catch_') or not filename.endswith('.json'):
+            return jsonify({'error': 'Invalid filename'}), 400
+        filepath = os.path.join(LOGS_DIR, filename)
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'Not found'}), 404
+        os.remove(filepath)
+        logger.info(f'Catch log deleted: {filename}')
+        return jsonify({'deleted': True})
 
     logger.info('Wheelhouse Advisor routes registered')
