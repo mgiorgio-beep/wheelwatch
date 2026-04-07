@@ -7,20 +7,20 @@
 <link rel="stylesheet" href="/static/sidebar.css">
 <style>
 :root {
-  --bg-primary: #0a0f1a;
-  --bg-card: #0d1520;
-  --bg-card-hover: #111b28;
-  --border: #1a2535;
-  --border-light: #223040;
-  --text-primary: #e0e8f0;
-  --text-secondary: #7a8a9a;
-  --text-muted: #4a5a6a;
-  --accent: #00d4ff;
-  --accent-dim: #00d4ff30;
-  --green: #00e676;
-  --red: #ff4444;
-  --orange: #ff9800;
-  --blue: #448aff;
+  --bg-primary: #f0f4f8;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --border: #dde3ea;
+  --border-light: #e8edf2;
+  --text-primary: #1a2332;
+  --text-secondary: #5a6a7a;
+  --text-muted: #8a96a4;
+  --accent: #0088cc;
+  --accent-dim: #0088cc18;
+  --green: #00a659;
+  --red: #dd3333;
+  --orange: #e68600;
+  --blue: #3377dd;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -146,7 +146,7 @@ body {
   justify-content: space-between;
   align-items: baseline;
   padding: 7px 0;
-  border-bottom: 1px solid #080d16;
+  border-bottom: 1px solid var(--border);
 }
 .fi-row:last-child { border-bottom: none; }
 .fi-row-label {
@@ -215,7 +215,7 @@ body {
   border-radius: 4px;
   padding: 8px 6px;
   text-align: center;
-  border: 1px solid #080d16;
+  border: 1px solid var(--border);
 }
 .fi-wx-time { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
 .fi-wx-temp { font-size: 16px; font-weight: 700; color: var(--text-primary); }
@@ -261,7 +261,7 @@ body {
   border-radius: 4px;
   padding: 10px;
   text-align: center;
-  border: 1px solid #080d16;
+  border: 1px solid var(--border);
 }
 .fi-buoy-val { font-size: 20px; font-weight: 700; color: var(--accent); }
 .fi-buoy-label { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.5px; }
@@ -314,7 +314,7 @@ body {
       <div style="display:flex;gap:8px;">
         <input id="advisor-input" type="text"
           placeholder="Leaving Ryder's Cove tomorrow at 12 PM..."
-          style="flex:1;background:#080d16;border:1px solid #1a2535;border-radius:4px;padding:10px 14px;
+          style="flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:10px 14px;
                  color:#e0e8f0;font-family:inherit;font-size:13px;outline:none;"
           onkeydown="if(event.key==='Enter')advisorSend()"
         >
@@ -386,6 +386,9 @@ function isUpcoming(s) {
 function renderBriefing(data) {
   var html = '';
 
+  // ---- LUNAR / SOLUNAR ----
+  html += renderLunar(data.lunar);
+
   // ---- BUOY CARD (top, full width) ----
   html += renderBuoy(data.buoy);
 
@@ -423,6 +426,25 @@ function renderBriefing(data) {
   if (data.tide_chart && data.tide_chart.predictions) {
     setTimeout(function() { drawTideChart(data.tide_chart); }, 100);
   }
+}
+
+// ---- LUNAR / SOLUNAR ----
+function renderLunar(lunar) {
+  if (!lunar) return '';
+  return '<div class="fi-card fi-full blue"><div class="fi-card-header">' +
+    '<div class="fi-card-title">' + (lunar.phase_icon || '🌙') + ' Lunar / Solunar</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body"><div class="fi-buoy-grid">' +
+    buoyItem(lunar.phase_name || '--', 'MOON PHASE') +
+    buoyItem(lunar.illumination + '%', 'ILLUMINATION') +
+    buoyItem(lunar.rating_stars || lunar.rating || '--', 'FISHING RATING') +
+    '</div>' +
+    '<div style="margin-top:12px;">' +
+    '<div class="fi-row"><span class="fi-row-label">Major Periods</span>' +
+    '<span class="fi-row-value">' + (lunar.major_periods ? lunar.major_periods.join(' &amp; ') : '--') + '</span></div>' +
+    '<div class="fi-row"><span class="fi-row-label">Minor Periods</span>' +
+    '<span class="fi-row-value">' + (lunar.minor_periods ? lunar.minor_periods.join(' &amp; ') : '--') + '</span></div>' +
+    '</div></div></div>';
 }
 
 // ---- BUOY ----
@@ -596,7 +618,7 @@ function drawTideChart(tideData) {
   function ty(v) { return pad.top + cH - (v - vMin) / (vMax - vMin) * cH; }
 
   // Background
-  ctx.fillStyle = '#080d16';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
   ctx.fillRect(0, 0, W, H);
 
   // Grid lines
@@ -662,9 +684,6 @@ function drawTideChart(tideData) {
   }
 }
 
-// ---- SOURCES (SST / Chlorophyll) ----
-function renderSources(title, icon, data, cardClass) {
-
 // ---- SATELLITE IMAGE VIEWER ----
 function renderSatelliteViewer() {
   return '<div class="fi-card fi-full" id="fi-sat-card"><div class="fi-card-header">' +
@@ -681,7 +700,7 @@ function renderSatelliteViewer() {
     satViewBtn('chatham', 'Chatham / Monomoy') +
     satViewBtn('capecod', 'Wide Cape Cod') +
     '</div>' +
-    '<div id="fi-sat-img-wrap" style="position:relative;width:100%;min-height:200px;background:#080d16;border-radius:4px;overflow:hidden;border:1px solid #1a2535;">' +
+    '<div id="fi-sat-img-wrap" style="position:relative;width:100%;min-height:200px;background:var(--bg-primary);border-radius:4px;overflow:hidden;border:1px solid var(--border);">' +
     '<div class="fi-loading" style="padding:20px;"><div class="fi-spinner"></div> Loading satellite image...</div>' +
     '</div>' +
     '<div id="fi-sat-meta" style="font-size:10px;color:#4a5a6a;margin-top:6px;"></div>' +
@@ -689,13 +708,13 @@ function renderSatelliteViewer() {
 }
 function satBtn(layer, label) {
   return '<button onclick="fiLoadSat(\'' + layer + '\')" class="fi-sat-btn" data-layer="' + layer + '" style="' +
-    'background:#0a0f1a;border:1px solid #1a2535;color:#7a8a9a;padding:6px 12px;border-radius:3px;' +
+    'background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:6px 12px;border-radius:3px;' +
     'font-family:inherit;font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:0.5px;' +
     '">' + label + '</button>';
 }
 function satViewBtn(view, label) {
   return '<button onclick="fiLoadSatView(\'' + view + '\')" class="fi-sat-view-btn" data-view="' + view + '" style="' +
-    'background:#0a0f1a;border:1px solid #1a2535;color:#7a8a9a;padding:5px 10px;border-radius:3px;' +
+    'background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:5px 10px;border-radius:3px;' +
     'font-family:inherit;font-size:10px;cursor:pointer;transition:all .2s;' +
     '">' + label + '</button>';
 }
@@ -721,14 +740,14 @@ function loadSatImage() {
   // Highlight active buttons
   document.querySelectorAll('.fi-sat-btn').forEach(function(b) {
     var isActive = b.getAttribute('data-layer') === currentSatLayer;
-    b.style.borderColor = isActive ? '#00d4ff' : '#1a2535';
-    b.style.color = isActive ? '#00d4ff' : '#7a8a9a';
-    b.style.background = isActive ? '#00d4ff15' : '#0a0f1a';
+    b.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+    b.style.color = isActive ? 'var(--accent)' : 'var(--text-secondary)';
+    b.style.background = isActive ? 'var(--accent-dim)' : 'var(--bg-primary)';
   });
   document.querySelectorAll('.fi-sat-view-btn').forEach(function(b) {
     var isActive = b.getAttribute('data-view') === currentSatView;
-    b.style.borderColor = isActive ? '#00d4ff' : '#1a2535';
-    b.style.color = isActive ? '#00d4ff' : '#7a8a9a';
+    b.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+    b.style.color = isActive ? 'var(--accent)' : 'var(--text-secondary)';
   });
 
   fetch('/api/fishing/satellite?layer=' + currentSatLayer + '&view=' + currentSatView)
@@ -818,7 +837,7 @@ function advisorAddMsg(role, text) {
     div.style.borderLeft = '3px solid #00d4ff';
     div.style.color = '#c0d0e0';
   } else {
-    div.style.background = '#0a1520';
+    div.style.background = 'var(--bg-card)';
     div.style.borderLeft = '3px solid #00e676';
     div.style.color = '#e0e8f0';
   }

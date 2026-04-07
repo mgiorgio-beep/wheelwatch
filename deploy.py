@@ -77,9 +77,20 @@ def main():
     upload_file(sftp, os.path.join(LOCAL_DIR, 'static', 'fishing.html'), '/opt/wheelhouse/static/fishing.html')
     upload_file(sftp, os.path.join(LOCAL_DIR, 'server.py'), '/opt/wheelhouse/server.py')
     upload_file(sftp, os.path.join(LOCAL_DIR, 'static', 'nco_logo.jpg'), '/opt/wheelhouse/static/nco_logo.jpg')
+    upload_file(sftp, os.path.join(LOCAL_DIR, 'static', 'sidebar.css'), '/opt/wheelhouse/static/sidebar.css')
+    upload_file(sftp, os.path.join(LOCAL_DIR, 'static', 'sidebar.js'), '/opt/wheelhouse/static/sidebar.js')
 
-    print('\n[7] Creating .env...')
-    secret_key = secrets.token_hex(32)
+    print('\n[7] Creating .env (preserving SECRET_KEY if exists)...')
+    # Read existing secret key so sessions survive deploys
+    existing_secret = ''
+    try:
+        with sftp.open('/opt/wheelhouse/.env', 'r') as f:
+            for line in f.read().splitlines():
+                if line.startswith('SECRET_KEY='):
+                    existing_secret = line.split('=', 1)[1]
+    except Exception:
+        pass
+    secret_key = existing_secret or secrets.token_hex(32)
     env_content = (
         f'ANTHROPIC_API_KEY={ANTHROPIC_KEY}\n'
         f'WHEELHOUSE_PASSWORD={WH_PASSWORD}\n'

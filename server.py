@@ -241,7 +241,10 @@ def api_user_hide_welcome():
 @app.route('/')
 @login_required
 def index():
-    return send_from_directory('static', 'fishing.html')
+    resp = send_from_directory('static', 'fishing.html')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 # Register routes
 from fishing_intel import register_routes as register_fishing_routes
