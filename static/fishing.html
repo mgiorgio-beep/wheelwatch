@@ -2001,14 +2001,15 @@ window.loadChart = function() {
   chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
 
   // NOAA ENC raster nautical charts with depth soundings
-  // OpenStreetMap base
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: 'OSM', maxZoom: 18
+  // NOAA ENC WMS — full nautical chart with depths, buoys, channels
+  // ArcGIS World Ocean Base
+  L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Esri Ocean', maxZoom: 16
   }).addTo(chartMap);
-
-  // OpenSeaMap nautical overlay (buoys, depths, channels)
-  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
-    attribution: 'OpenSeaMap', maxZoom: 18, opacity: 1
+  // NOAA ENC overlay with depths, buoys, channels
+  L.tileLayer.wms('https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer', {
+    layers: '0,1,2,3,4,5,6,7', format: 'image/png', transparent: true,
+    attribution: 'NOAA ENC', maxZoom: 18
   }).addTo(chartMap);
 };
 
@@ -2491,8 +2492,10 @@ window.openSelectedCatchMap = function() {
   var center = [points[0].lat, points[0].lon];
   catchMapInstance = L.map(container).setView(center, 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM', maxZoom: 18 }).addTo(catchMapInstance);
-  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', { attribution: 'OpenSeaMap', maxZoom: 18 }).addTo(catchMapInstance);
+  L.tileLayer.wms('https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer', {
+    layers: '0,1,2,3,4,5,6,7', format: 'image/png', transparent: true,
+    attribution: 'NOAA ENC', maxZoom: 18
+  }).addTo(catchMapInstance);
 
   var bounds = L.latLngBounds();
   points.forEach(function(p) {
@@ -2543,11 +2546,12 @@ window.openCatchMap = function(idx) {
 
   catchMapInstance = L.map(container).setView([log.gps.lat, log.gps.lon], 14);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: 'OSM', maxZoom: 18
+  L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Esri Ocean', maxZoom: 16
   }).addTo(catchMapInstance);
-  L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
-    attribution: 'OpenSeaMap', maxZoom: 18, opacity: 1
+  L.tileLayer.wms('https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer', {
+    layers: '0,1,2,3,4,5,6,7', format: 'image/png', transparent: true,
+    attribution: 'NOAA ENC', maxZoom: 18
   }).addTo(catchMapInstance);
 
   var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
