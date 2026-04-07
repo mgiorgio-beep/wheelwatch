@@ -246,6 +246,20 @@ def index():
     resp.headers['Pragma'] = 'no-cache'
     return resp
 
+@app.route('/api/suggestion', methods=['POST'])
+@login_required
+def api_suggestion():
+    data = request.get_json()
+    text = data.get('text', '').strip() if data else ''
+    if not text:
+        return jsonify({'error': 'No suggestion provided'}), 400
+    username = session.get('username', 'unknown')
+    send_notification(
+        f'💬 Wheelhouse Suggestion from {username}',
+        f'Suggestion from {username}:\n\n{text}\n\nhttps://wheelhouse.rednun.com'
+    )
+    return jsonify({'sent': True})
+
 # Register routes
 from fishing_intel import register_routes as register_fishing_routes
 from captain_advisor import register_advisor_routes

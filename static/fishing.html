@@ -760,7 +760,7 @@ body {
 /* Detail sections hidden by default */
 #fi-details { display: none; }
 #fi-details .fi-detail-view { display: none; }
-#fi-details .fi-detail-view.active { display: block; }
+#fi-details .fi-detail-view.active { display: block; padding-bottom: 80px; }
 
 /* Back button */
 .fi-back {
@@ -889,7 +889,7 @@ body {
   <button class="nav-link" onclick="navToggle();catchToggle()"><span class="nav-link-icon">🐟</span> Log Catch</button>
   <div class="nav-divider"></div>
   <button class="nav-link" onclick="navTo('fi-sec-info')"><span class="nav-link-icon">ℹ️</span> About / Help</button>
-  <a class="nav-link" href="mailto:mike@rednun.com?subject=Wheelhouse%20Suggestion"><span class="nav-link-icon">💬</span> Send Suggestion</a>
+  <button class="nav-link" onclick="navToggle();suggestOpen()"><span class="nav-link-icon">💬</span> Send Suggestion</button>
 </nav>
 
 <div class="fi-wrap" id="fi-app">
@@ -1213,7 +1213,7 @@ function renderBriefing(data) {
     '</ul>' +
     '<p style="margin-top:12px;"><strong>Catch Logging:</strong> Every catch you log — species, bait, spot, GPS, and conditions — feeds back into the AI Advisor. The more you log, the smarter your future plans get.</p>' +
     '<p style="margin-top:12px;color:var(--text-secondary);font-size:12px;">Data: NOAA, NWS, NDBC, NASA, Windfinder · AI: Anthropic Claude</p>' +
-    '<p style="margin-top:12px;"><a href="mailto:mike@rednun.com?subject=Wheelhouse%20Suggestion" style="color:var(--accent);text-decoration:none;font-weight:700;">💬 Send a suggestion — mike@rednun.com</a></p>' +
+    '<p style="margin-top:12px;"><button onclick="suggestOpen()" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:0;">💬 Send a suggestion</button></p>' +
     '</div></div></div>');
 
   html += detailView('fi-sec-charts', 'Charts',
@@ -1829,6 +1829,48 @@ fiLoad();
 
 // Auto-refresh every 15 minutes
 setInterval(fiLoad, 15 * 60 * 1000);
+
+// ==================== SUGGESTION BOX ====================
+window.suggestOpen = function() {
+  var overlay = document.createElement('div');
+  overlay.id = 'suggest-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;width:90%;max-width:380px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.15);';
+  box.innerHTML = '<div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">💬 Send a Suggestion</div>' +
+    '<textarea id="suggest-text" style="width:100%;min-height:100px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text-primary);font-family:inherit;font-size:14px;resize:none;outline:none;box-sizing:border-box;" placeholder="What would make Wheelhouse better?"></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;">' +
+    '<button onclick="document.getElementById(\'suggest-overlay\').remove()" style="flex:1;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>' +
+    '<button id="suggest-send-btn" onclick="suggestSend()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">Send</button>' +
+    '</div>';
+  overlay.appendChild(box);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  setTimeout(function() { document.getElementById('suggest-text').focus(); }, 100);
+};
+
+window.suggestSend = function() {
+  var text = document.getElementById('suggest-text').value.trim();
+  if (!text) return;
+  var btn = document.getElementById('suggest-send-btn');
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+  fetch('/api/suggestion', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text: text })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function() {
+    btn.textContent = 'Sent!';
+    btn.style.background = 'var(--green)';
+    setTimeout(function() { var o = document.getElementById('suggest-overlay'); if (o) o.remove(); }, 1000);
+  })
+  .catch(function() {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+  });
+};
 
 // ==================== NAUTICAL CHART ====================
 var chartMap = null;
