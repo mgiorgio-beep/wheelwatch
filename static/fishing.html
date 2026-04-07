@@ -37,7 +37,7 @@ body {
   max-width: 1200px;
 }
 @media(max-width:768px) {
-  .fi-wrap { margin-left: 0; padding: 12px; }
+  .fi-wrap { margin-left: 0; padding: 12px; padding-top: 56px; }
 }
 
 /* Header */
@@ -756,9 +756,109 @@ body {
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
+
+/* ==================== HAMBURGER NAV ==================== */
+.nav-burger {
+  position: fixed;
+  top: 12px; left: 12px;
+  width: 40px; height: 40px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 999;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.nav-burger span {
+  display: block; width: 18px; height: 2px;
+  background: var(--text-primary);
+  border-radius: 1px;
+  transition: all .2s;
+}
+.nav-burger.open span:nth-child(1) { transform: rotate(45deg) translate(2.5px, 2.5px); }
+.nav-burger.open span:nth-child(2) { opacity: 0; }
+.nav-burger.open span:nth-child(3) { transform: rotate(-45deg) translate(2.5px, -2.5px); }
+
+.nav-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 998;
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s;
+}
+.nav-overlay.open { opacity: 1; pointer-events: auto; }
+
+.nav-panel {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 260px;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border);
+  z-index: 999;
+  transform: translateX(-100%);
+  transition: transform .3s cubic-bezier(0.32, 0.72, 0, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 60px 0 24px;
+}
+.nav-panel.open { transform: translateX(0); }
+
+.nav-title {
+  font-size: 11px; font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 16px 20px 8px;
+}
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border: none; background: none; width: 100%;
+  text-align: left;
+}
+.nav-link:active { background: var(--accent-dim); }
+.nav-link-icon { font-size: 16px; width: 24px; text-align: center; }
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 20px;
+}
 </style>
 </head>
 <body>
+
+<!-- HAMBURGER NAV -->
+<button class="nav-burger" id="nav-burger" onclick="navToggle()">
+  <span></span><span></span><span></span>
+</button>
+<div class="nav-overlay" id="nav-overlay" onclick="navToggle()"></div>
+<nav class="nav-panel" id="nav-panel">
+  <div class="nav-title">Dashboard</div>
+  <button class="nav-link" onclick="navTo('fi-sec-cuts')"><span class="nav-link-icon">🔵</span> Cuts</button>
+  <button class="nav-link" onclick="navTo('fi-sec-lunar')"><span class="nav-link-icon">🌙</span> Lunar / Solunar</button>
+  <button class="nav-link" onclick="navTo('fi-sec-buoy')"><span class="nav-link-icon">🔵</span> Buoy</button>
+  <button class="nav-link" onclick="navTo('fi-sec-tides')"><span class="nav-link-icon">🌊</span> Tides</button>
+  <button class="nav-link" onclick="navTo('fi-sec-currents')"><span class="nav-link-icon">⚡</span> Currents</button>
+  <button class="nav-link" onclick="navTo('fi-sec-wind')"><span class="nav-link-icon">💨</span> Wind Trend</button>
+  <button class="nav-link" onclick="navTo('fi-sec-windfinder')"><span class="nav-link-icon">💨</span> Windfinder</button>
+  <button class="nav-link" onclick="navTo('fi-sec-weather')"><span class="nav-link-icon">🌤️</span> Hourly Weather</button>
+  <button class="nav-link" onclick="navTo('fi-sec-forecast')"><span class="nav-link-icon">📋</span> Extended Forecast</button>
+  <button class="nav-link" onclick="navTo('fi-sec-tidechart')"><span class="nav-link-icon">📈</span> Tide Chart</button>
+  <button class="nav-link" onclick="navTo('fi-sec-sst')"><span class="nav-link-icon">🛰️</span> SST</button>
+  <button class="nav-link" onclick="navTo('fi-sec-satellite')"><span class="nav-link-icon">📸</span> Satellite</button>
+  <button class="nav-link" onclick="navTo('fi-sec-chlorophyll')"><span class="nav-link-icon">🧬</span> Chlorophyll</button>
+  <div class="nav-divider"></div>
+  <button class="nav-link" onclick="navToggle();advisorToggle()"><span class="nav-link-icon">🧠</span> Advisor</button>
+  <button class="nav-link" onclick="navToggle();catchToggle()"><span class="nav-link-icon">🐟</span> Log Catch</button>
+</nav>
 
 <div class="fi-wrap" id="fi-app">
 
@@ -809,7 +909,7 @@ body {
   </div>
 
   <!-- CONDITIONS QUICK CARDS -->
-  <div class="cond-cards">
+  <div class="cond-cards" id="fi-sec-cuts">
     <div class="cond-card" onclick="condOpen('north')">
       <div class="cond-card-title">🔵 North Cut</div>
       <div class="cond-card-sub">Current &amp; conditions</div>
@@ -952,47 +1052,22 @@ function isUpcoming(s) {
 function renderBriefing(data) {
   var html = '';
 
-  // ---- LUNAR / SOLUNAR ----
-  html += renderLunar(data.lunar);
-
-  // ---- BUOY CARD (top, full width) ----
-  html += renderBuoy(data.buoy);
-
-  // ---- TIDES ----
-  html += renderTides(data.tides);
-
-  // ---- CURRENTS ----
-  html += renderCurrents(data.currents);
-
-  // ---- WIND TREND (observed + forecast) ----
-  html += renderWindTrend(data.wind_history, data.weather);
-
-  // ---- WINDFINDER WIDGET ----
-  html += '<div class="fi-card fi-full"><div class="fi-card-header">' +
+  html += '<div id="fi-sec-lunar">' + renderLunar(data.lunar) + '</div>';
+  html += '<div id="fi-sec-buoy">' + renderBuoy(data.buoy) + '</div>';
+  html += '<div id="fi-sec-tides">' + renderTides(data.tides) + '</div>';
+  html += '<div id="fi-sec-currents">' + renderCurrents(data.currents) + '</div>';
+  html += '<div id="fi-sec-wind">' + renderWindTrend(data.wind_history, data.weather) + '</div>';
+  html += '<div id="fi-sec-windfinder" class="fi-card fi-full"><div class="fi-card-header">' +
     '<div class="fi-card-title">💨 Windfinder — Chatham Forecast</div>' +
     '<span class="fi-badge fi-badge-ext">EXT</span></div>' +
     '<div class="fi-card-body"><div id="windfinder-widget"></div></div></div>';
-
-  // ---- WEATHER HOURLY ----
-  html += renderWeatherHourly(data.weather);
-
-  // ---- FORECAST ----
-  html += renderForecast(data.weather);
-
-  // ---- TIDE CHART ----
-  html += renderTideChartCard(data.tide_chart);
-
-  // ---- SST SOURCES ----
-  html += renderSources('SST — Sea Surface Temp', '🛰️', data.sst, 'orange');
-
-  // ---- SATELLITE IMAGERY (EMBEDDED) ----
-  html += renderSatelliteViewer();
-
-  // ---- VISUAL SATELLITE LINKS ----
+  html += '<div id="fi-sec-weather">' + renderWeatherHourly(data.weather) + '</div>';
+  html += '<div id="fi-sec-forecast">' + renderForecast(data.weather) + '</div>';
+  html += '<div id="fi-sec-tidechart">' + renderTideChartCard(data.tide_chart) + '</div>';
+  html += '<div id="fi-sec-sst">' + renderSources('SST — Sea Surface Temp', '🛰️', data.sst, 'orange') + '</div>';
+  html += '<div id="fi-sec-satellite">' + renderSatelliteViewer() + '</div>';
   html += renderSources('Visual Satellite — Open In New Tab', '📸', data.visual, '');
-
-  // ---- CHLOROPHYLL ----
-  html += renderSources('Chlorophyll — Bait Finder', '🧬', data.chlorophyll, 'green');
+  html += '<div id="fi-sec-chlorophyll">' + renderSources('Chlorophyll — Bait Finder', '🧬', data.chlorophyll, 'green') + '</div>';
 
   document.getElementById('fi-content').innerHTML = html;
   document.getElementById('fi-ts').textContent = 'Updated: ' + new Date().toLocaleString();
@@ -1589,6 +1664,25 @@ fiLoad();
 
 // Auto-refresh every 15 minutes
 setInterval(fiLoad, 15 * 60 * 1000);
+
+// ==================== NAV MENU ====================
+var navOpen = false;
+window.navToggle = function() {
+  navOpen = !navOpen;
+  document.getElementById('nav-panel').classList.toggle('open', navOpen);
+  document.getElementById('nav-overlay').classList.toggle('open', navOpen);
+  document.getElementById('nav-burger').classList.toggle('open', navOpen);
+};
+
+window.navTo = function(id) {
+  navToggle();
+  var el = document.getElementById(id);
+  if (el) {
+    setTimeout(function() {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+};
 
 // ==================== CAPTAIN'S ADVISOR ====================
 var advisorHistory = [];
