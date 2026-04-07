@@ -22,7 +22,6 @@ STATIONS = {
     'currents': {
         'pollock_rip': {'id': 'ACT1616', 'name': 'Pollock Rip Channel (Butler Hole)'},
         'chatham_roads': {'id': 'ACT1611', 'name': 'Chatham Roads'},
-        'monomoy_point': {'id': 'ACT1626', 'name': 'Monomoy Point (West of)'},
     }
 }
 
