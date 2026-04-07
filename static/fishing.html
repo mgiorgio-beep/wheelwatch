@@ -1219,9 +1219,27 @@ function renderBriefing(data) {
     '<div class="fi-card fi-full"><div class="fi-card-header">' +
     '<div class="fi-card-title">📒 Catch History</div>' +
     '<span class="fi-badge fi-badge-live">LOG</span></div>' +
-    '<div class="fi-card-body"><div id="catch-history-list">' +
+    '<div class="fi-card-body">' +
+    '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">' +
+    '<select id="catch-sort" class="catch-select" style="width:auto;flex:1;" onchange="loadCatchHistory()">' +
+    '<option value="date-desc">Newest First</option>' +
+    '<option value="date-asc">Oldest First</option>' +
+    '<option value="spot">By Spot</option>' +
+    '<option value="species">By Species</option>' +
+    '</select>' +
+    '</div>' +
+    '<div id="catch-history-list">' +
     '<div class="fi-loading"><div class="fi-spinner"></div> Loading catches...</div>' +
-    '</div></div></div>');
+    '</div></div></div>' +
+    '<div id="catch-map-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;">' +
+    '<div style="position:fixed;top:5%;left:5%;right:5%;bottom:5%;background:var(--bg-primary);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);">' +
+    '<div id="catch-map-title" style="font-size:14px;font-weight:700;color:var(--text-primary);"></div>' +
+    '<button onclick="closeCatchMap()" style="background:none;border:1px solid var(--border);color:var(--text-secondary);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">&times;</button>' +
+    '</div>' +
+    '<div id="catch-map-container" style="flex:1;"></div>' +
+    '<div id="catch-map-info" style="padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-secondary);"></div>' +
+    '</div></div>');
 
   html += detailView('fi-sec-info', 'About',
     '<div class="fi-card fi-full"><div class="fi-card-header">' +
@@ -2332,57 +2350,150 @@ window.condClose = function() {
 };
 
 // ==================== CATCH HISTORY ====================
+var _catchLogs = [];
+
 function loadCatchHistory() {
   var list = document.getElementById('catch-history-list');
   if (!list) return;
+
+  // If we already have data, just re-sort and render
+  if (_catchLogs.length > 0) {
+    renderCatchList(_catchLogs);
+    return;
+  }
+
   list.innerHTML = '<div class="fi-loading"><div class="fi-spinner"></div> Loading catches...</div>';
 
   fetch('/api/fishing/logs')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data.logs || data.logs.length === 0) {
-        list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">No catches logged yet. Use the 🐟 Log Catch button to record your first one!</div>';
-        return;
-      }
-      var html = '';
-      data.logs.forEach(function(log) {
-        var conds = log.conditions || {};
-        html += '<div style="padding:12px 0;border-bottom:1px solid var(--border);">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
-          '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' + (log.spot || 'Unknown spot') + '</div>' +
-          '<div style="font-size:11px;color:var(--text-muted);">' + (log.date || '') + '</div></div>';
-        var details = [];
-        if (log.species) details.push(log.species);
-        if (log.technique) details.push(log.technique);
-        if (log.lure) details.push(log.lure);
-        if (details.length) {
-          html += '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">' + details.join(' · ') + '</div>';
-        }
-        if (log.notes) {
-          html += '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic;">' + log.notes + '</div>';
-        }
-        // Conditions
-        var condParts = [];
-        if (conds.water_temp) condParts.push(conds.water_temp);
-        if (conds.wind) condParts.push(conds.wind);
-        if (conds.tide_phase) condParts.push(conds.tide_phase);
-        if (condParts.length) {
-          html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + condParts.join(' · ') + '</div>';
-        }
-        if (log.gps) {
-          html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">📍 ' + log.gps.lat.toFixed(4) + ', ' + log.gps.lon.toFixed(4) + '</div>';
-        }
-        if (log.logged_by) {
-          html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">by ' + log.logged_by + '</div>';
-        }
-        html += '</div>';
-      });
-      list.innerHTML = html;
+      _catchLogs = data.logs || [];
+      renderCatchList(_catchLogs);
     })
     .catch(function() {
       list.innerHTML = '<div style="color:var(--red);font-size:13px;padding:12px;">Error loading catch history</div>';
     });
 }
+
+function renderCatchList(logs) {
+  var list = document.getElementById('catch-history-list');
+  if (!list) return;
+
+  if (logs.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">No catches logged yet. Use the 🐟 Log Catch button to record your first one!</div>';
+    return;
+  }
+
+  // Sort
+  var sort = document.getElementById('catch-sort');
+  var sortVal = sort ? sort.value : 'date-desc';
+  var sorted = logs.slice();
+
+  if (sortVal === 'date-asc') {
+    sorted.reverse();
+  } else if (sortVal === 'spot') {
+    sorted.sort(function(a, b) { return (a.spot || '').localeCompare(b.spot || ''); });
+  } else if (sortVal === 'species') {
+    sorted.sort(function(a, b) { return (a.species || '').localeCompare(b.species || ''); });
+  }
+
+  var html = '';
+  sorted.forEach(function(log, idx) {
+    var conds = log.conditions || {};
+    var hasGps = log.gps && log.gps.lat && log.gps.lon;
+    var clickStyle = hasGps ? 'cursor:pointer;' : '';
+    var clickAttr = hasGps ? ' onclick="openCatchMap(' + idx + ')"' : '';
+
+    html += '<div style="padding:12px 0;border-bottom:1px solid var(--border);' + clickStyle + '"' + clickAttr + '>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' +
+      (hasGps ? '📍 ' : '') + (log.spot || 'Unknown spot') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);">' + (log.date || '') + '</div></div>';
+
+    var details = [];
+    if (log.species) details.push(log.species);
+    if (log.technique) details.push(log.technique);
+    if (log.lure) details.push(log.lure);
+    if (details.length) {
+      html += '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">' + details.join(' · ') + '</div>';
+    }
+    if (log.notes) {
+      html += '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic;">' + log.notes + '</div>';
+    }
+    var condParts = [];
+    if (conds.water_temp) condParts.push(conds.water_temp);
+    if (conds.wind) condParts.push(conds.wind);
+    if (conds.tide_phase) condParts.push(conds.tide_phase);
+    if (condParts.length) {
+      html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + condParts.join(' · ') + '</div>';
+    }
+    if (hasGps) {
+      html += '<div style="font-size:10px;color:var(--accent);margin-top:2px;">📍 Tap to view on chart</div>';
+    }
+    if (log.logged_by) {
+      html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">by ' + log.logged_by + '</div>';
+    }
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+var catchMapInstance = null;
+
+window.openCatchMap = function(idx) {
+  var logs = _catchLogs;
+  if (!logs || !logs[idx]) return;
+  var log = logs[idx];
+  if (!log.gps || !log.gps.lat || !log.gps.lon) return;
+
+  var overlay = document.getElementById('catch-map-overlay');
+  overlay.style.display = 'block';
+
+  var title = (log.spot || 'Catch') + (log.species ? ' — ' + log.species : '');
+  document.getElementById('catch-map-title').textContent = title;
+
+  var infoParts = [log.date || ''];
+  if (log.technique) infoParts.push(log.technique);
+  if (log.lure) infoParts.push(log.lure);
+  var conds = log.conditions || {};
+  if (conds.water_temp) infoParts.push(conds.water_temp);
+  if (conds.tide_phase) infoParts.push(conds.tide_phase);
+  document.getElementById('catch-map-info').textContent = infoParts.join(' · ');
+
+  var container = document.getElementById('catch-map-container');
+
+  if (catchMapInstance) {
+    catchMapInstance.remove();
+    catchMapInstance = null;
+  }
+
+  catchMapInstance = L.map(container).setView([log.gps.lat, log.gps.lon], 14);
+
+  L.tileLayer('https://seamlessrnc.nauticalcharts.noaa.gov/arcgis/rest/services/RNC/NOAA_RNC/ImageServer/tile/{z}/{y}/{x}', {
+    attribution: 'NOAA',
+    maxZoom: 16
+  }).addTo(catchMapInstance);
+
+  var popupText = '<b>' + (log.spot || 'Catch') + '</b>';
+  if (log.species) popupText += '<br>' + log.species;
+  if (log.lure) popupText += '<br>' + log.lure;
+  if (log.date) popupText += '<br><small>' + log.date + '</small>';
+
+  L.marker([log.gps.lat, log.gps.lon])
+    .addTo(catchMapInstance)
+    .bindPopup(popupText)
+    .openPopup();
+
+  setTimeout(function() { catchMapInstance.invalidateSize(); }, 200);
+};
+
+window.closeCatchMap = function() {
+  document.getElementById('catch-map-overlay').style.display = 'none';
+  if (catchMapInstance) {
+    catchMapInstance.remove();
+    catchMapInstance = null;
+  }
+};
 
 // ==================== CATCH VOICE RECORDING ====================
 var catchRecognition = null;
