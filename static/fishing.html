@@ -1250,7 +1250,7 @@ function renderBriefing(data) {
   html += detailView('fi-sec-info', 'About',
     '<div class="fi-card fi-full"><div class="fi-card-header">' +
     '<div class="fi-card-title">⚓ Wheelhouse</div>' +
-    '<span class="fi-badge fi-badge-live">v1.01</span></div>' +
+    '<span class="fi-badge fi-badge-live">v1.02</span></div>' +
     '<div class="fi-card-body">' +
     '<div style="font-size:13px;line-height:1.7;color:var(--text-primary);">' +
     '<p><strong>How to use Wheelhouse:</strong></p>' +
@@ -1277,7 +1277,7 @@ function renderBriefing(data) {
     '<option value="41.6600,-69.9500,14">Chatham Cuts (close)</option>' +
     '<option value="41.5500,-69.9800,12">Pollock Rip / Shoals</option>' +
     '<option value="41.3900,-70.0500,12">Nantucket Approaches</option>' +
-    '<option value="41.2850,-70.0967,13">Nantucket Harbor</option>' +
+    '<option value="41.02850,-70.0967,13">Nantucket Harbor</option>' +
     '<option value="41.4583,-70.6000,13">Vineyard Haven</option>' +
     '<option value="41.8500,-70.0800,12">Nauset / Orleans</option>' +
     '<option value="42.0500,-70.1800,13">Provincetown</option>' +
@@ -2025,7 +2025,7 @@ window.loadChart = function() {
 };
 
 // ==================== WHAT'S NEW POPUP ====================
-var WH_VERSION = '1.01';
+var WH_VERSION = '1.02';
 (function() {
   var seen = localStorage.getItem('wh_version_seen');
   if (seen === WH_VERSION) return;
@@ -2041,16 +2041,18 @@ var WH_VERSION = '1.01';
       '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">What\'s New</div></div>' +
       '<div style="font-size:13px;line-height:1.7;color:var(--text-primary);">' +
       '<ul style="padding-left:18px;">' +
-      '<li><strong>New Home Screen</strong> — Quick Look card with conditions at a glance</li>' +
-      '<li><strong>App Navigation</strong> — hamburger menu with back button, cleaner layout</li>' +
-      '<li><strong>Cut Safety Cards</strong> — tap for AI analysis of North &amp; South Cut conditions</li>' +
-      '<li><strong>Improved Advisor Chat</strong> — bottom sheet, scroll to top of plan, markdown formatting, knows your GPS location</li>' +
-      '<li><strong>Wind Trend Chart</strong> — observed + forecast with gusts</li>' +
-      '<li><strong>Windfinder</strong> — embedded forecast widget</li>' +
-      '<li><strong>Nautical Charts</strong> — NOAA charts for 9 areas, selectable dropdown</li>' +
-      '<li><strong>More Tides</strong> — added Nantucket, Great Point, Vineyard Haven, Provincetown, Wellfleet</li>' +
-      '<li><strong>Catch Logger</strong> — your logs make the AI smarter over time</li>' +
-      '<li><strong>About &amp; Suggestions</strong> — info page + email link</li>' +
+      '<li><strong>Clean Home Screen</strong> — Quick Look card with wind, water temp, waves, tide, current, moon, and weather at a glance</li>' +
+      '<li><strong>App Navigation</strong> — hamburger menu to jump to any section, each opens as its own page with back button</li>' +
+      '<li><strong>Cut Conditions</strong> — tap North or South Cut for AI analysis with best transit times and current conditions</li>' +
+      '<li><strong>Smarter Advisor</strong> — bottom sheet chat with voice input. Knows your GPS, gives ride analysis with compass headings and wave angles, analyzes cut transit, and asks useful follow-ups</li>' +
+      '<li><strong>Wave &amp; Ride Analysis</strong> — advisor calculates your heading vs wave direction and tells you what kind of ride to expect (head seas, beam, following) and when it\'ll improve</li>' +
+      '<li><strong>Wind Trend Chart</strong> — 12hr observed + 12hr forecast with gust overlay and NOW marker</li>' +
+      '<li><strong>Windfinder</strong> — embedded Chatham forecast in knots</li>' +
+      '<li><strong>Nautical Charts</strong> — NOAA ENC charts for 9 areas with depth soundings</li>' +
+      '<li><strong>Catch Logger</strong> — voice-to-text with AI parsing, GPS auto-capture, conditions snapshot. Swipe to delete. Tap to view on chart with red pin</li>' +
+      '<li><strong>Catch History</strong> — sortable by date, spot, species. Select catches to plot on one chart. All conditions saved</li>' +
+      '<li><strong>More Tides</strong> — Nantucket, Great Point, Vineyard Haven, Provincetown, Wellfleet</li>' +
+      '<li><strong>Suggestions</strong> — in-app suggestion box with voice dictation</li>' +
       '</ul></div>' +
       '<button onclick="this.parentElement.parentElement.remove();localStorage.setItem(\'wh_version_seen\',\'' + WH_VERSION + '\')" ' +
       'style="width:100%;margin-top:16px;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Got it</button>';
