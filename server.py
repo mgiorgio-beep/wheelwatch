@@ -249,15 +249,18 @@ def index():
 @app.route('/api/suggestion', methods=['POST'])
 @login_required
 def api_suggestion():
+    import threading
     data = request.get_json()
     text = data.get('text', '').strip() if data else ''
     if not text:
         return jsonify({'error': 'No suggestion provided'}), 400
     username = session.get('username', 'unknown')
-    send_notification(
+    # Send email in background so response is instant
+    threading.Thread(target=send_notification, args=(
         f'💬 Wheelhouse Suggestion from {username}',
         f'Suggestion from {username}:\n\n{text}\n\nhttps://wheelhouse.rednun.com'
-    )
+    )).start()
+    logger.info(f'Suggestion received from {username}: {text[:100]}')
     return jsonify({'sent': True})
 
 # Register routes
