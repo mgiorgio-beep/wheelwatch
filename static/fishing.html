@@ -854,6 +854,8 @@ body {
   margin: 8px 20px;
 }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -1039,6 +1041,7 @@ body {
     <div class="catch-gps" id="catch-gps-status">Getting location...</div>
 
     <button class="catch-save" id="catch-save-btn" onclick="catchSave()">Save Catch</button>
+    <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px;">Your catch data makes the AI Advisor smarter — the more you log, the better your plans get.</div>
   </div>
 </div>
 
@@ -1218,18 +1221,24 @@ function renderBriefing(data) {
     '<div class="fi-card-title">🗺️ Nautical Charts</div>' +
     '<span class="fi-badge fi-badge-ext">NOAA</span></div>' +
     '<div class="fi-card-body">' +
-    '<div style="width:100%;height:70vh;border-radius:6px;overflow:hidden;border:1px solid var(--border);">' +
-    '<iframe src="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.6700/-69.9600" ' +
-    'style="width:100%;height:100%;border:none;" loading="lazy"></iframe></div>' +
+    '<div style="margin-bottom:10px;">' +
+    '<select id="chart-select" class="catch-select" onchange="loadChart()">' +
+    '<option value="41.6723,-69.9597,13">Chatham / Monomoy</option>' +
+    '<option value="41.6600,-69.9500,14">Chatham Cuts (close)</option>' +
+    '<option value="41.5500,-69.9800,12">Pollock Rip / Shoals</option>' +
+    '<option value="41.3900,-70.0500,12">Nantucket Approaches</option>' +
+    '<option value="41.2850,-70.0967,13">Nantucket Harbor</option>' +
+    '<option value="41.4583,-70.6000,13">Vineyard Haven</option>' +
+    '<option value="41.8500,-70.0800,12">Nauset / Orleans</option>' +
+    '<option value="42.0500,-70.1800,13">Provincetown</option>' +
+    '<option value="41.9300,-70.0400,13">Wellfleet Harbor</option>' +
+    '</select></div>' +
+    '<div id="chart-container" style="width:100%;height:65vh;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:var(--bg-card);"></div>' +
     '<div style="margin-top:10px;">' +
-    '<a class="fi-source" href="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.6700/-69.9600" target="_blank" rel="noopener">' +
+    '<a class="fi-source" href="https://www.nauticalcharts.noaa.gov/enconline/enconline.html" target="_blank" rel="noopener">' +
     '<span class="fi-source-arrow">→</span>' +
-    '<div class="fi-source-name">Open Full Chart Viewer</div>' +
-    '<div class="fi-source-desc">NOAA ENC Online — Chatham / Monomoy area</div></a>' +
-    '<a class="fi-source" href="https://www.nauticalcharts.noaa.gov/enconline/enconline.html#702/41.2850/-70.0967" target="_blank" rel="noopener">' +
-    '<span class="fi-source-arrow">→</span>' +
-    '<div class="fi-source-name">Nantucket Area Chart</div>' +
-    '<div class="fi-source-desc">NOAA ENC Online — Nantucket Harbor & approaches</div></a>' +
+    '<div class="fi-source-name">Open NOAA ENC Viewer</div>' +
+    '<div class="fi-source-desc">Full interactive chart with all layers</div></a>' +
     '</div></div></div>');
 
   html += '</div>';
@@ -1821,6 +1830,41 @@ fiLoad();
 // Auto-refresh every 15 minutes
 setInterval(fiLoad, 15 * 60 * 1000);
 
+// ==================== NAUTICAL CHART ====================
+var chartMap = null;
+
+window.loadChart = function() {
+  var sel = document.getElementById('chart-select');
+  if (!sel) return;
+  var parts = sel.value.split(',');
+  var lat = parseFloat(parts[0]);
+  var lon = parseFloat(parts[1]);
+  var zoom = parseInt(parts[2]);
+  var container = document.getElementById('chart-container');
+  if (!container) return;
+
+  if (chartMap) {
+    chartMap.setView([lat, lon], zoom);
+    return;
+  }
+
+  chartMap = L.map(container, { zoomControl: true }).setView([lat, lon], zoom);
+
+  // NOAA nautical chart raster tiles
+  L.tileLayer('https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png', {
+    attribution: 'NOAA',
+    maxZoom: 18,
+    opacity: 1
+  }).addTo(chartMap);
+
+  // Add OpenStreetMap as fallback for areas without NOAA coverage
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '',
+    maxZoom: 18,
+    opacity: 0.3
+  }).addTo(chartMap);
+};
+
 // ==================== WHAT'S NEW POPUP ====================
 var WH_VERSION = '2.0';
 (function() {
@@ -1888,6 +1932,10 @@ window.navTo = function(id) {
   setTimeout(function() {
     if (id === 'fi-sec-tidechart' && window._lastTideData) drawTideChart(window._lastTideData);
     if (id === 'fi-sec-wind' && window._lastWindPoints) drawWindChart(window._lastWindPoints);
+    if (id === 'fi-sec-charts') {
+      loadChart();
+      setTimeout(function() { if (chartMap) chartMap.invalidateSize(); }, 200);
+    }
     if (id === 'fi-sec-windfinder') {
       var wf = document.getElementById('windfinder-widget');
       if (wf && !wf.hasChildNodes()) {
@@ -1914,6 +1962,16 @@ window.navBack = function() {
 var advisorHistory = [];
 var advisorBusy = false;
 var advisorOpen = false;
+var advisorGps = null;
+
+// Keep GPS updated in background
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(
+    function(pos) { advisorGps = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },
+    function() {},
+    { enableHighAccuracy: true }
+  );
+}
 
 window.advisorToggle = function() {
   advisorOpen = !advisorOpen;
@@ -2046,7 +2104,7 @@ window.advisorSend = function() {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      message: msg,
+      message: msg + (advisorGps ? '\n[Current GPS: ' + advisorGps.lat.toFixed(4) + ', ' + advisorGps.lon.toFixed(4) + ']' : ''),
       history: advisorHistory
     })
   })
