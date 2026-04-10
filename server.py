@@ -246,6 +246,34 @@ def index():
     resp.headers['Pragma'] = 'no-cache'
     return resp
 
+@app.route('/api/bot/advisor', methods=['POST'])
+def api_bot_advisor():
+    """Bot-only advisor endpoint — auths via X-Bot-Key header instead of session.
+
+    Reuses the same captain_advisor.ask_advisor logic as /api/fishing/advisor,
+    but is callable from the Telegram bot process running on the same host.
+    """
+    expected_key = os.environ.get('BOT_SECRET_KEY', '')
+    if not expected_key:
+        logger.warning('Bot advisor called but BOT_SECRET_KEY is not configured')
+        return jsonify({'error': 'Bot endpoint not configured'}), 503
+
+    provided_key = request.headers.get('X-Bot-Key', '')
+    if provided_key != expected_key:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.get_json(silent=True) or {}
+    user_message = data.get('message', '')
+    if not user_message:
+        return jsonify({'error': 'No message provided'}), 400
+
+    messages = data.get('messages', [])
+
+    from captain_advisor import ask_advisor
+    reply = ask_advisor(messages, user_message)
+    return jsonify({'reply': reply})
+
+
 @app.route('/api/suggestion', methods=['POST'])
 @login_required
 def api_suggestion():
