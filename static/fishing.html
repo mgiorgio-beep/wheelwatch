@@ -1017,6 +1017,14 @@ function parseFloat2(v) {
   var n = parseFloat(v);
   return isNaN(n) ? v : n.toFixed(1);
 }
+function safeDate(s) {
+  try {
+    if (!s) return null;
+    var str = String(s);
+    var d = str.includes('T') ? new Date(str) : new Date(str.replace(' ', 'T'));
+    return isNaN(d.getTime()) ? null : d;
+  } catch(e) { return null; }
+}
 function isUpcoming(s) {
   try {
     var d = s.includes('T') ? new Date(s) : new Date(s.replace(' ', 'T'));
@@ -1047,9 +1055,9 @@ function renderQuickLook(data) {
       if (upcoming.length > 0) {
         var p = upcoming[0];
         var isH = p.type === 'H';
-        var tTime = new Date(p.t.replace(' ', 'T'));
+        var tTime = safeDate(p.t);
         nextTide = (isH ? 'High' : 'Low') + ' ' + parseFloat(p.v).toFixed(1) + 'ft @ ' +
-          tTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+          (tTime ? tTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : fmtTime(p.t));
         break;
       }
     }
@@ -1065,9 +1073,9 @@ function renderQuickLook(data) {
         var c = upCur[0];
         var cType = c.Type === 'flood' ? 'Flood' : c.Type === 'ebb' ? 'Ebb' : 'Slack';
         var cVel = c.Velocity_Major ? parseFloat(c.Velocity_Major).toFixed(1) + 'kt' : '';
-        var cTime = new Date(c.Time.replace(' ', 'T'));
+        var cTime = safeDate(c.Time);
         nextCurrent = cType + ' ' + cVel + ' @ ' +
-          cTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+          (cTime ? cTime.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : fmtTime(c.Time));
       }
     }
   }
@@ -1098,26 +1106,28 @@ function renderQuickLook(data) {
 }
 
 function renderBriefing(data) {
-  // Dashboard
-  var dashHtml = renderQuickLook(data);
-  dashHtml += renderWindTrend(data.wind_history, data.weather);
-  dashHtml += renderBuoy(data.buoy);
-  dashHtml += renderWeatherHourly(data.weather);
-  dashHtml += renderLunar(data.lunar);
-  dashHtml += renderForecast(data.weather);
+  // Dashboard — each section wrapped so one failure doesn't kill the rest
+  var dashHtml = '';
+  try { dashHtml += renderQuickLook(data); } catch(e) { console.error('QuickLook render error:', e); }
+  try { dashHtml += renderWindTrend(data.wind_history, data.weather); } catch(e) { console.error('WindTrend render error:', e); }
+  try { dashHtml += renderBuoy(data.buoy); } catch(e) { console.error('Buoy render error:', e); }
+  try { dashHtml += renderWeatherHourly(data.weather); } catch(e) { console.error('WeatherHourly render error:', e); }
+  try { dashHtml += renderLunar(data.lunar); } catch(e) { console.error('Lunar render error:', e); }
+  try { dashHtml += renderForecast(data.weather); } catch(e) { console.error('Forecast render error:', e); }
   document.getElementById('fi-content').innerHTML = dashHtml;
 
   // Tides tab
-  var tidesHtml = renderTideChartCard(data.tide_chart);
-  tidesHtml += renderTides(data.tides);
-  tidesHtml += renderCurrents(data.currents);
+  var tidesHtml = '';
+  try { tidesHtml += renderTideChartCard(data.tide_chart); } catch(e) { console.error('TideChart render error:', e); }
+  try { tidesHtml += renderTides(data.tides); } catch(e) { console.error('Tides render error:', e); }
+  try { tidesHtml += renderCurrents(data.currents); } catch(e) { console.error('Currents render error:', e); }
   document.getElementById('tides-content').innerHTML = tidesHtml;
 
   // Satellite tab
-  document.getElementById('sat-viewer').innerHTML = renderSatelliteViewer();
-  if (data.visual) document.getElementById('visual-sat-links').innerHTML = renderSources('Visual Satellite', data.visual, '');
-  if (data.sst) document.getElementById('sst-links').innerHTML = renderSources('SST -- Sea Surface Temp', data.sst, '');
-  if (data.chlorophyll) document.getElementById('chlorophyll-links').innerHTML = renderSources('Chlorophyll -- Bait Finder', data.chlorophyll, '');
+  try { document.getElementById('sat-viewer').innerHTML = renderSatelliteViewer(); } catch(e) { console.error('SatViewer render error:', e); }
+  try { if (data.visual) document.getElementById('visual-sat-links').innerHTML = renderSources('Visual Satellite', data.visual, ''); } catch(e) {}
+  try { if (data.sst) document.getElementById('sst-links').innerHTML = renderSources('SST -- Sea Surface Temp', data.sst, ''); } catch(e) {}
+  try { if (data.chlorophyll) document.getElementById('chlorophyll-links').innerHTML = renderSources('Chlorophyll -- Bait Finder', data.chlorophyll, ''); } catch(e) {}
 
   // Timestamp
   document.getElementById('fi-ts').textContent = new Date().toLocaleString('en-US', {hour:'numeric',minute:'2-digit'});
@@ -1240,7 +1250,8 @@ function renderWindTrend(windHistory, weather) {
   }
   if (weather && weather.hourly) {
     weather.hourly.slice(0, 12).forEach(function(h) {
-      var t = new Date(h.startTime);
+      var t = safeDate(h.startTime);
+      if (!t) return;
       var ws = h.windSpeed || '';
       var nums = ws.match(/\d+/g);
       var spd = 0;
@@ -1373,8 +1384,8 @@ function renderWeatherHourly(weather) {
     '<span class="fi-badge fi-badge-live">NWS</span></div>' +
     '<div class="fi-card-body"><div class="fi-wx-grid">';
   hours.forEach(function(h) {
-    var t = new Date(h.startTime);
-    var time = t.toLocaleTimeString('en-US', {hour:'numeric'});
+    var t = safeDate(h.startTime);
+    var time = t ? t.toLocaleTimeString('en-US', {hour:'numeric'}) : '--';
     html += '<div class="fi-wx-hour"><div class="fi-wx-time">' + time + '</div>' +
       '<div class="fi-wx-temp">' + h.temperature + '</div>' +
       '<div class="fi-wx-wind">' + (h.windDirection || '') + ' ' + (h.windSpeed || '') + '</div>' +
@@ -1425,7 +1436,8 @@ function drawTideChart(tideData) {
   var points = [];
   for (var i = 0; i < preds.length; i += 5) {
     var p = preds[i];
-    var d = new Date(p.t.replace(' ', 'T'));
+    var d = safeDate(p.t);
+    if (!d) continue;
     points.push({time: d.getTime(), val: parseFloat(p.v)});
   }
   var tMin = points[0].time, tMax = points[points.length-1].time;
@@ -1951,8 +1963,8 @@ window.condOpen = function(cut) {
           var cls = type === 'flood' ? 'fi-flood' : type === 'ebb' ? 'fi-ebb' : 'fi-slack';
           var tag = type === 'flood' ? 'FLOOD' : type === 'ebb' ? 'EBB' : 'SLACK';
           var vel = p.Velocity_Major ? parseFloat(p.Velocity_Major).toFixed(1) + ' kt' : 'slack';
-          var t = p.Time.includes('T') ? new Date(p.Time) : new Date(p.Time.replace(' ', 'T'));
-          var label = t.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+          var t = safeDate(p.Time);
+          var label = t ? t.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : fmtTime(p.Time);
           html += '<div class="fi-row"><span class="fi-row-label">' + label + '</span>' +
             '<div><span class="fi-row-value ' + cls + '">' + vel + '</span>' +
             '<div class="fi-row-sub">' + tag + '</div></div></div>';
@@ -2859,7 +2871,7 @@ function updateCrewList(members) {
       '</div>'+
       '<div style="flex:1;">'+
         '<div style="color:var(--text-primary);font-size:13px;font-weight:600;">'+m.username+'</div>'+
-        '<div style="color:var(--green);font-size:11px;margin-top:2px;">On the water &middot; updated '+new Date(m.updated_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+
+        '<div style="color:var(--green);font-size:11px;margin-top:2px;">On the water &middot; updated '+(safeDate(m.updated_at)||new Date()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+
       '</div>'+
       '<button onclick="flyToMember('+m.lat+','+m.lon+')" style="background:var(--bg-primary);border:1px solid var(--border-light);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 8px;cursor:pointer;font-family:inherit;font-weight:700;letter-spacing:1px;">FIND</button>'+
     '</div>';
