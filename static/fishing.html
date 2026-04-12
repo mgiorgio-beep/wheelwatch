@@ -1111,6 +1111,7 @@ function renderBriefing(data) {
   try { dashHtml += renderQuickLook(data); } catch(e) { console.error('QuickLook render error:', e); }
   try { dashHtml += renderWindTrend(data.wind_history, data.weather); } catch(e) { console.error('WindTrend render error:', e); }
   try { dashHtml += renderBuoy(data.buoy); } catch(e) { console.error('Buoy render error:', e); }
+  try { dashHtml += renderAIS(data.ais); } catch(e) { console.error('AIS render error:', e); }
   try { dashHtml += renderWeatherHourly(data.weather); } catch(e) { console.error('WeatherHourly render error:', e); }
   try { dashHtml += renderLunar(data.lunar); } catch(e) { console.error('Lunar render error:', e); }
   try { dashHtml += renderForecast(data.weather); } catch(e) { console.error('Forecast render error:', e); }
@@ -1139,6 +1140,12 @@ function renderBriefing(data) {
   }
   if (window._lastWindPoints) {
     setTimeout(function() { drawWindChart(window._lastWindPoints); }, 150);
+  }
+
+  // AIS overlay on chart map
+  if (data.ais && data.ais.vessels) {
+    window._lastAISData = data.ais;
+    if (chartMap) setTimeout(function() { updateAISMarkers(data.ais); }, 200);
   }
 }
 
@@ -1184,6 +1191,32 @@ function renderBuoy(buoy) {
 
 function buoyItem(val, label) {
   return '<div class="fi-buoy-item"><div class="fi-buoy-val">' + val + '</div><div class="fi-buoy-label">' + label + '</div></div>';
+}
+
+function renderAIS(ais) {
+  if (!ais || !ais.vessels || ais.vessels.length === 0) return '';
+  var total = ais.total || ais.vessels.length;
+  var fishing = ais.fishing_count || 0;
+  var html = '<div class="fi-card"><div class="fi-card-header">' +
+    '<div class="fi-card-title">Nearby Vessels</div>' +
+    '<span class="fi-badge fi-badge-live">AIS</span></div>' +
+    '<div class="fi-card-body"><div class="fi-buoy-grid">' +
+    buoyItem(total, 'TOTAL NEARBY') +
+    buoyItem(fishing, 'FISHING') +
+    '</div>';
+  if (ais.fishing_vessels && ais.fishing_vessels.length > 0) {
+    html += '<div style="margin-top:12px;">';
+    ais.fishing_vessels.slice(0, 8).forEach(function(v) {
+      var speed = v.speed != null ? (v.speed / 10).toFixed(1) + ' kt' : '--';
+      var course = v.course != null ? Math.round(v.course / 10) + '\u00B0' : '';
+      html += '<div class="fi-row"><span class="fi-row-label" style="font-size:12px;">' + (v.name || 'Unknown') + '</span>' +
+        '<span class="fi-row-value" style="font-size:12px;">' + speed + (course ? ' / ' + course : '') + '</span></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);">Vessels shown on Satellite &rarr; Charts map</div>';
+  html += '</div></div>';
+  return html;
 }
 
 function renderTides(tides) {
@@ -1709,7 +1742,44 @@ window.loadChart = function() {
     layers: '0,1,2,3,4,5,6,7', format: 'image/png', transparent: true,
     attribution: 'NOAA ENC', maxZoom: 18
   }).addTo(chartMap);
+
+  // Overlay AIS vessels if data is available
+  if (window._lastAISData) updateAISMarkers(window._lastAISData);
 };
+
+// ==================== AIS VESSEL OVERLAY ====================
+var aisLayer = null;
+
+function updateAISMarkers(ais) {
+  if (!chartMap || !ais || !ais.vessels) return;
+  if (aisLayer) chartMap.removeLayer(aisLayer);
+  aisLayer = L.layerGroup();
+
+  ais.vessels.forEach(function(v) {
+    if (!v.lat || !v.lon) return;
+    var isFishing = v.type && [30, 36, 37].indexOf(v.type) >= 0;
+    var color = isFishing ? '#30D158' : '#8E8E93';
+    var radius = isFishing ? 6 : 4;
+    var speed = v.speed != null ? (v.speed / 10).toFixed(1) + ' kt' : 'stationary';
+    var course = v.course != null ? Math.round(v.course / 10) + '\u00B0' : '';
+
+    var marker = L.circleMarker([v.lat, v.lon], {
+      radius: radius, fillColor: color, color: color,
+      weight: 1, fillOpacity: 0.8
+    });
+    marker.bindPopup(
+      '<div style="background:var(--bg-card);color:var(--text-primary);padding:8px 10px;border-radius:6px;font-size:12px;min-width:120px;">' +
+      '<strong>' + (v.name || 'Unknown') + '</strong>' +
+      (isFishing ? ' <span style="color:#30D158;">&#9679;</span>' : '') +
+      '<br>' + speed + (course ? ' / hdg ' + course : '') +
+      (v.length ? '<br>' + v.length + 'm LOA' : '') +
+      '</div>', { className: 'ais-popup' }
+    );
+    aisLayer.addLayer(marker);
+  });
+
+  aisLayer.addTo(chartMap);
+}
 
 // ==================== WHAT'S NEW POPUP ====================
 var WH_VERSION = '2.00';
