@@ -949,6 +949,10 @@ def api_sms_stats():
 
 # ==================== LEGAL PAGES (Twilio A2P compliance) ====================
 
+@app.route('/update')
+def update_page():
+    return send_from_directory('static', 'update.html')
+
 @app.route('/privacy')
 def privacy():
     return render_legal_page('privacy')

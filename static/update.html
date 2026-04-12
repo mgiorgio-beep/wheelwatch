@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wheelhouse v1.5 — What's Coming</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111214;
+      color: #e8edf2;
+      font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      padding: 48px 24px 32px;
+      max-width: 680px;
+      margin: 0 auto;
+      border-bottom: 1px solid #1e2328;
+    }
+
+    .version-pill {
+      display: inline-block;
+      background: #0A84FF18;
+      color: #0A84FF;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid #0A84FF30;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      color: #ffffff;
+      margin-bottom: 14px;
+    }
+
+    .header h1 span { color: #0A84FF; }
+
+    .header p {
+      font-size: 17px;
+      color: #8E8E93;
+      max-width: 520px;
+      line-height: 1.7;
+    }
+
+    .header-meta {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #48484A;
+    }
+
+    /* Main content */
+    .content {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* Section */
+    .section {
+      padding: 40px 0 0;
+      border-bottom: 1px solid #1e2328;
+    }
+
+    .section:last-child { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #48484A;
+      margin-bottom: 6px;
+    }
+
+    .section-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+
+    .section-intro {
+      font-size: 15px;
+      color: #8E8E93;
+      margin-bottom: 28px;
+      line-height: 1.7;
+    }
+
+    /* Feature blocks */
+    .feature {
+      margin-bottom: 24px;
+      padding: 20px;
+      background: #16191d;
+      border-radius: 14px;
+      border: 1px solid #1e2328;
+    }
+
+    .feature-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .icon-blue   { background: #0A84FF18; }
+    .icon-green  { background: #34C75918; }
+    .icon-orange { background: #FF9F0A18; }
+    .icon-teal   { background: #5AC8FA18; }
+    .icon-purple { background: #BF5AF218; }
+    .icon-red    { background: #FF453A18; }
+
+    .feature-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .feature-tag {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .tag-new      { background: #34C75918; color: #34C759; border: 1px solid #34C75930; }
+    .tag-improved { background: #0A84FF18; color: #0A84FF; border: 1px solid #0A84FF30; }
+    .tag-coming   { background: #FF9F0A18; color: #FF9F0A; border: 1px solid #FF9F0A30; }
+
+    .feature p {
+      font-size: 14px;
+      color: #8E8E93;
+      line-height: 1.7;
+    }
+
+    .feature-detail {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #1e2328;
+    }
+
+    .detail-row {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .detail-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #0A84FF;
+      flex-shrink: 0;
+      margin-top: 8px;
+    }
+
+    .detail-dot.green  { background: #34C759; }
+    .detail-dot.orange { background: #FF9F0A; }
+    .detail-dot.purple { background: #BF5AF2; }
+
+    .detail-row span {
+      font-size: 13px;
+      color: #8E8E93;
+      line-height: 1.6;
+    }
+
+    .detail-row strong {
+      color: #c8d0d8;
+      font-weight: 500;
+    }
+
+    /* Divider number */
+    .phase-number {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #0A84FF;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    /* Footer CTA */
+    .footer {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 24px 60px;
+      text-align: center;
+    }
+
+    .footer h2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .footer p {
+      font-size: 15px;
+      color: #8E8E93;
+      margin-bottom: 28px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #0A84FF;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 36px;
+      border-radius: 14px;
+      text-decoration: none;
+      letter-spacing: -0.2px;
+    }
+
+    .cta-button:hover { background: #0070e0; }
+
+    @media (max-width: 480px) {
+      .header h1 { font-size: 32px; }
+      .section-title { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="version-pill">Version 1.5</div>
+  <h1>What's coming to<br><span>Wheelhouse</span></h1>
+  <p>A complete overhaul — smarter predictions, a live crew map, SMS access, and a redesigned interface built for the water.</p>
+  <div class="header-meta">Chatham, MA · Monomoy Shoals · Spring 2026</div>
+</div>
+
+<div class="content">
+
+  <!-- SECTION: SOCIAL -->
+  <div class="section">
+    <div class="section-label">Crews</div>
+    <div class="section-title">Fish with your crew, not the internet</div>
+    <div class="section-intro">The most-requested feature is here. Private groups for captains who trust each other. You control what you share, who sees it, and when.</div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-blue">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2L11.5 7.5H17L12.5 11L14.5 17L9 13.5L3.5 17L5.5 11L1 7.5H6.5L9 2Z" stroke="#0A84FF" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Starting a crew</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Go to the Crews tab and tap "+ New". Give your crew a name — "Chatham Fleet", "The Usual Suspects", whatever works. Wheelhouse generates a short invite code on the spot. Share that code however you normally talk to your captains — text, radio, dock. Anyone who enters it joins immediately. You're the captain of the crew, which means you can see who's in, remove members if needed, and transfer the role to someone else if you want to step back.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Takes about 30 seconds to create — name it, get the code, share it</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>No limit on crew size — two captains or twenty, same setup</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>You can create multiple crews — a tight inner circle and a broader regional group, for example</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>As captain you can remove members at any time and transfer the captain role if needed</span></div>
+      </div>
+
+      <!-- How to steps -->
+      <div style="margin-top:16px;border-top:1px solid #1e2328;padding-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#48484A;margin-bottom:12px">How to start a crew</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#0A84FF18;border:1px solid #0A84FF30;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#0A84FF;font-size:11px;font-weight:700">1</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Open Wheelhouse and tap the <span style="color:#c8d0d8;font-weight:500">Crews</span> tab at the bottom of the screen</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#0A84FF18;border:1px solid #0A84FF30;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#0A84FF;font-size:11px;font-weight:700">2</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Tap <span style="color:#c8d0d8;font-weight:500">+ New</span> in the top right and enter a name for your crew</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#0A84FF18;border:1px solid #0A84FF30;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#0A84FF;font-size:11px;font-weight:700">3</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Your invite code appears instantly — text it to whoever you want in the crew</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#0A84FF18;border:1px solid #0A84FF30;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#0A84FF;font-size:11px;font-weight:700">4</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Turn on catch sharing for that crew and the feed goes live — you'll see their catches, they'll see yours</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-blue">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="7" cy="6" r="2.5" stroke="#0A84FF" stroke-width="1.5"/>
+            <circle cx="12" cy="6" r="2.5" stroke="#0A84FF" stroke-width="1.5"/>
+            <path d="M2 16c0-2.8 2.2-5 5-5h4c2.8 0 5 2.2 5 5" stroke="#0A84FF" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Joining a crew</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>If someone sends you an invite code, go to the Crews tab, enter the code in the Join field, and tap Join. You're in immediately — no waiting, no approval needed. You can be in as many crews as you want at the same time. A tight two-man, the full Chatham fleet, a regional group — each one is completely separate with its own feed and sharing settings.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Invite code based — nobody gets in without a code from the captain</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>No limit on how many crews you can join</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Joining a crew doesn't automatically turn on sharing — you control that separately</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>You can leave a crew at any time from the crew settings — no notification goes to the captain</span></div>
+      </div>
+
+      <div style="margin-top:16px;border-top:1px solid #1e2328;padding-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#48484A;margin-bottom:12px">How to join a crew</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#34C75918;border:1px solid #34C75930;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#34C759;font-size:11px;font-weight:700">1</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Get an invite code from a crew captain — 6 characters, looks like CHATHAM42</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#34C75918;border:1px solid #34C75930;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#34C759;font-size:11px;font-weight:700">2</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">Go to the <span style="color:#c8d0d8;font-weight:500">Crews</span> tab, scroll to the Join section at the bottom, enter the code and tap Join</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:22px;height:22px;background:#34C75918;border:1px solid #34C75930;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+              <span style="color:#34C759;font-size:11px;font-weight:700">3</span>
+            </div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.5">The crew appears in your list immediately — tap it to see the feed and toggle your sharing on</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-green">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="7" stroke="#34C759" stroke-width="1.5"/>
+            <path d="M6 9l2 2 4-4" stroke="#34C759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Sharing controls</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Each crew has its own sharing toggle. You decide per crew whether your catches are visible to that group. You could be in three crews, share with two, and stay dark in one. Nobody knows you're there unless you're sharing.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot green"></div><span>Per-crew toggle — sharing is not all-or-nothing</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Turn sharing on or off at any time, mid-season, mid-trip</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>GPS coordinates are never shared with anyone under any circumstance — that's a hard technical restriction, not a setting</span></div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-orange">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="2" y="3" width="14" height="12" rx="2.5" stroke="#FF9F0A" stroke-width="1.5"/>
+            <path d="M5 7h8M5 10h5" stroke="#FF9F0A" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Catch feed</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Each crew has its own live feed. When a member logs a catch and has sharing on, it shows up for everyone in that crew — species, technique, lure, and time. That's it. No spot names, no GPS, no notes.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Feeds are per-crew — your Chatham Fleet feed is separate from your other crews</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Only members with sharing enabled appear in the feed</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Catch data from all crews feeds into the predictive engine anonymously — species and technique only, no names, no locations</span></div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-teal">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2C5.7 2 3 4.7 3 8c0 4.5 6 9 6 9s6-4.5 6-9c0-3.3-2.7-6-6-6z" stroke="#5AC8FA" stroke-width="1.5"/>
+            <circle cx="9" cy="8" r="2" stroke="#5AC8FA" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="feature-name">Friend Finder</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Open the map and see where your crew is in real time. When you leave the dock you pick which single crew can see your position for that session. You can switch crews or go dark at any point mid-trip.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Live positions update every 60 seconds while the app is open</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Tap a crew member on the map to see their catches from today with full detail including location</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>You choose which one crew sees you per trip — not all crews at once</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Auto-expires — close the app and your dot disappears within 2 hours</span></div>
+      </div>
+    </div>
+
+    <div class="feature" style="margin-bottom:40px;">
+      <div class="feature-header">
+        <div class="feature-icon icon-purple">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M3 14s0-4 6-4 6 4 6 4" stroke="#BF5AF2" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="9" cy="6" r="3" stroke="#BF5AF2" stroke-width="1.5"/>
+            <path d="M14 8c1.5.5 2 2 2 3" stroke="#BF5AF2" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Notifications</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>When any crew member logs a catch, everyone in that crew who has sharing on gets notified. In-app as a toast notification, and as a text to your phone once your number is registered.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>In-app notifications show species, technique, and lure — no spot names</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>SMS notifications go to your registered phone — no need to have the app open</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Notifications are per-crew — you only hear from crews where you have sharing enabled</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: ACCESS -->
+  <div class="section">
+    <div class="section-label">Access</div>
+    <div class="section-title">Use it however you're already fishing</div>
+    <div class="section-intro">New ways to get to the advisor and log catches without opening a browser.</div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-green">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="4" y="1" width="10" height="16" rx="2" stroke="#34C759" stroke-width="1.5"/>
+            <circle cx="9" cy="14" r="1" fill="#34C759"/>
+            <path d="M6.5 4h5" stroke="#34C759" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">SMS Access</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Text the advisor from any phone. No app, no browser, nothing to install. Ask about conditions, tides, the ride out — it responds exactly like the app. Log a catch by texting it and the AI parses it automatically.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot green"></div><span>Text <strong>(774) 268-5448</strong> — works from any phone</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Register your number in account settings to link SMS to your account</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Catch logs via SMS sync to your dashboard automatically</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Crew catch notifications come to your phone — no need to have the app open</span></div>
+      </div>
+    </div>
+
+    <div class="feature" style="margin-bottom:40px;">
+      <div class="feature-header">
+        <div class="feature-icon icon-purple">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="7" stroke="#BF5AF2" stroke-width="1.5"/>
+            <path d="M9 5v4l3 2" stroke="#BF5AF2" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Phone Registration & Verification</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Add your phone number in account settings. Wheelhouse sends a 6-digit verification code to confirm it's yours. Once verified your SMS messages are tied to your account — catches, conversations, and crew notifications all sync.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>One-time setup in account settings</span></div>
+        <div class="detail-row"><div class="detail-dot purple"></div><span>Verified number required for crew SMS notifications and SMS catch logging</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Remove or change your number at any time</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: ADVISOR + INTELLIGENCE -->
+  <div class="section">
+    <div class="section-label">Intelligence</div>
+    <div class="section-title">The advisor got a brain</div>
+    <div class="section-intro">The advisor used to know conditions. Now it knows patterns. Here's what changed.</div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-blue">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="7" stroke="#0A84FF" stroke-width="1.5"/>
+            <path d="M6 11C6.5 9.5 7.5 8.5 9 8.5C10.5 8.5 11.5 9.5 12 11" stroke="#0A84FF" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="9" cy="6" r="1.2" fill="#0A84FF"/>
+          </svg>
+        </div>
+        <div class="feature-name">Predictive Engine v2</div>
+        <span class="feature-tag tag-improved">Rebuilt</span>
+      </div>
+      <p>Before, the advisor worked off live conditions and its own knowledge of Monomoy. Now it matches today's exact setup against three years of historical conditions and actual logged catches — and tells you what's been producing under setups like today's.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span><strong>Tide-relative matching</strong> — Not what time it is. Where you are in the cycle. A 2-hour flood fishes the same at 7 AM or 1 PM.</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span><strong>SST gradient</strong> — Sound side vs Atlantic side temp break, and whether it's strengthening or weakening. Bait stacks on the break edge.</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span><strong>Solunar periods</strong> — Major and minor feeding windows driven by the moon's gravitational pull on water. Same physics as the tide table. When a major period stacks on a moving flood at a rip, that's your window.</span></div>
+        <div class="detail-row"><div class="detail-dot purple"></div><span><strong>Water temp, wind, chlorophyll</strong> — Stripers have a preferred range. Chlorophyll shows where bait is concentrated. Wind affects sea state and feeding.</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span><strong>Spring vs neap awareness</strong> — Spring tides produce stronger rips. The engine knows the difference and weights it.</span></div>
+      </div>
+
+      <!-- Before / After example -->
+      <div style="margin-top:16px;border-top:1px solid #1e2328;padding-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#48484A;margin-bottom:14px">Example — same question, two engines</div>
+
+        <!-- Shared question -->
+        <div style="background:#111214;border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid #1e2328">
+          <div style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#48484A;margin-bottom:6px">Question</div>
+          <div style="font-size:14px;color:#c8d0d8;line-height:1.5">"Leaving Ryder's Cove at 6 AM tomorrow. Striper fishing. What's the plan?"</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <!-- Old engine -->
+          <div style="background:#111214;border-radius:10px;padding:12px 14px;border:1px solid #1e2328">
+            <div style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#FF453A;margin-bottom:8px">Before</div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.6">Tide is rising at 6 AM, high at 10:42. Water temp around 54°F, SW wind 12 knots. Conditions look reasonable for stripers. Try the rips on the incoming. Stonehorse and Pollock Rip are typical spots this time of year.</div>
+          </div>
+          <!-- New engine -->
+          <div style="background:#111214;border-radius:10px;padding:12px 14px;border:1px solid #0A84FF30">
+            <div style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#34C759;margin-bottom:8px">Now</div>
+            <div style="font-size:13px;color:#8E8E93;line-height:1.6">Strong setup. Major solunar hits at 6:40 AM — right as you're clearing the cuts. You'll be 3.5 hours into the flood at departure, peak flow at Pollock Rip around 8:15.<br><br>SST break is running 8°F between the Sound and Atlantic sides — sharpest it's been in 10 days and still strengthening. That edge has been stacking bait.<br><br>Pattern match: 6 logged catches under similar conditions this season — 5 stripers, 1 blue. Casting was productive 4 of those days, live bait 2. Spring tide, so the rip will be running hard — give Stonehorse 6 AM to 9 AM before it peaks and flattens out.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-orange">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="2" y="2" width="14" height="14" rx="3" stroke="#FF9F0A" stroke-width="1.5"/>
+            <path d="M5 11C6.5 8.5 8 7 9 7C10 7 11.5 8.5 13 11" stroke="#FF9F0A" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Live SST & Chlorophyll</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>Real satellite numbers at 5 specific locations around Monomoy — Sound side, Monomoy tip, Stonehorse, East Atlantic, and offshore. The advisor now says "the break is 8 degrees and strengthening" instead of linking you to a satellite image.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>NASA MUR satellite · 1km resolution · updated daily</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>3 years of historical SST data pre-loaded — the engine has real pattern history before you log a single catch this season</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Chlorophyll from MODIS Aqua · shows bait concentration zones</span></div>
+      </div>
+    </div>
+
+    <div class="feature" style="margin-bottom:40px;">
+      <div class="feature-header">
+        <div class="feature-icon icon-green">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2L10.5 7H16L11.5 10L13 15L9 12L5 15L6.5 10L2 7H7.5L9 2Z" stroke="#34C759" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Historical Conditions Logger</div>
+        <span class="feature-tag tag-new">New</span>
+      </div>
+      <p>The system now logs conditions three times a day — 6 AM, noon, and 6 PM — and saves a full snapshot every time a catch is logged. The database grows all season. By fall it'll be matching your exact conditions against hundreds of real Monomoy catch events.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Tide state, SST gradient, solunar, buoy data, wind, chlorophyll — all saved at catch time</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>More catches logged = sharper predictions for everyone</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: UI -->
+  <div class="section">
+    <div class="section-label">Interface</div>
+    <div class="section-title">Built for the water, not a desk</div>
+    <div class="section-intro">Complete redesign. Easier to read in sunlight, faster to use with one hand, less clutter everywhere.</div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-blue">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="2" y="2" width="14" height="14" rx="3" stroke="#0A84FF" stroke-width="1.5"/>
+            <path d="M5 9h8M5 6h5M5 12h6" stroke="#0A84FF" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">iOS-Style Redesign</div>
+        <span class="feature-tag tag-improved">Redesigned</span>
+      </div>
+      <p>Dark base with floating light cards. SF Pro typography. Bottom tab bar. The advisor chat is front and center. No emojis, no clutter. Five tabs — Dashboard, Tides, Satellite, Log Catch, Crews — plus the new Map tab for Friend Finder.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Condition strip always visible at top — tide, water temp, wind, solunar in one glance</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Voice log redesigned — tap, speak, done</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>All the same data, half the taps to get to it</span></div>
+      </div>
+    </div>
+
+    <div class="feature" style="margin-bottom:40px;">
+      <div class="feature-header">
+        <div class="feature-icon icon-red">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2C5.1 2 2 5.1 2 9s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7z" stroke="#FF453A" stroke-width="1.5"/>
+            <path d="M6 9l2 2 4-4" stroke="#FF453A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">New Login with Phone Verification</div>
+        <span class="feature-tag tag-improved">Updated</span>
+      </div>
+      <p>The login screen is rebuilt to match the new design. Signup now includes optional phone number entry with SMS verification — add it during signup or later in settings. The whole auth flow is cleaner and faster.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Same username/password login — nothing to change</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Phone number optional during signup — add it any time</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>6-digit SMS verification — takes 30 seconds</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: FUTURE -->
+  <div class="section">
+    <div class="section-label">On the horizon</div>
+    <div class="section-title">What's coming next</div>
+    <div class="section-intro">Wheelhouse is built around Monomoy and the Chatham fleet today. The plan is to expand — more water, more captains, sharper predictions everywhere.</div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-teal">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="6.5" stroke="#5AC8FA" stroke-width="1.5"/>
+            <path d="M9 3v6l4 2" stroke="#5AC8FA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Expanded coverage area</div>
+        <span class="feature-tag tag-coming">Coming</span>
+      </div>
+      <p>The current data grid is centered on Monomoy Shoals. The plan is to extend SST monitoring points, tide stations, current data, and satellite coverage across the full Cape and Islands region — giving every captain in the fleet real-time intelligence for wherever they're fishing.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span><strong>Nauset to Provincetown</strong> — Race Point, Peaked Hill, Nauset Inlet, outer beach rips from Orleans to Truro</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span><strong>South to south of Nantucket</strong> — Great Point, Sankaty Head, Cross Rip, Davis South Shoal, and the offshore temperature breaks beyond the shelf edge</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span><strong>Nantucket Sound</strong> — Horseshoe Shoal, Handkerchief, Bass River, south side of Hyannis out to Vineyard Sound</span></div>
+        <div class="detail-row"><div class="detail-dot purple"></div><span><strong>Vineyard Sound</strong> — Woods Hole, Quick's Hole, Devil's Bridge, Squibnocket Point</span></div>
+        <div class="detail-row"><div class="detail-dot"></div><span>Each area gets its own SST monitoring points, tide stations, chlorophyll readings, and historical data seeding — same intelligence Chatham has today</span></div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-header">
+        <div class="feature-icon icon-purple">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2L11 7H16.5L12 10.5L14 16L9 12.5L4 16L6 10.5L1.5 7H7L9 2Z" stroke="#BF5AF2" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Per-area pattern engines</div>
+        <span class="feature-tag tag-coming">Coming</span>
+      </div>
+      <p>As the fleet grows beyond Chatham, the predictive engine will build separate pattern databases for each region. Catches logged at Race Point train the Race Point engine. Catches at Great Point train that one. The intelligence stays local and accurate — not averaged across 100 miles of coastline.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>Each area accumulates its own historical conditions and catch patterns independently</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Captains who fish multiple areas contribute to all of them automatically based on their logged catch locations</span></div>
+      </div>
+    </div>
+
+    <div class="feature" style="margin-bottom:40px;">
+      <div class="feature-header">
+        <div class="feature-icon icon-orange">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="6.5" stroke="#FF9F0A" stroke-width="1.5"/>
+            <circle cx="9" cy="9" r="3" stroke="#FF9F0A" stroke-width="1.5"/>
+            <path d="M9 2.5V5M9 13v2.5M2.5 9H5M13 9h2.5" stroke="#FF9F0A" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Species beyond striped bass</div>
+        <span class="feature-tag tag-coming">Coming</span>
+      </div>
+      <p>The current engine is tuned for stripers. As the dataset grows the plan is to add dedicated pattern models for false albacore, bluefish, and bluefin — each with their own seasonal baselines, preferred conditions, and historical data. Albies in particular have very specific thermal and current preferences that the SST gradient data is already perfectly positioned to track.</p>
+      <div class="feature-detail">
+        <div class="detail-row"><div class="detail-dot"></div><span>False albacore — SST and chlorophyll driven, typically following the 68–72°F band</span></div>
+        <div class="detail-row"><div class="detail-dot green"></div><span>Bluefish — less temperature-specific, more tide and bait-stack driven</span></div>
+        <div class="detail-row"><div class="detail-dot orange"></div><span>Bluefin — offshore SST breaks, chlorophyll edges, and current seams south of Nantucket</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer CTA -->
+<div class="footer">
+  <h2>Ready when you are</h2>
+  <p>Log in to see what's changed. Text (774) 268-5448 to try the advisor from your phone.</p>
+  <a href="https://wheelhouse.rednun.com" class="cta-button">Open Wheelhouse</a>
+</div>
+
+</body>
+</html>
