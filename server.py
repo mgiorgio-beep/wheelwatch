@@ -137,6 +137,18 @@ def init_db():
         message_count INTEGER DEFAULT 0
     )''')
 
+    db.execute('''CREATE TABLE IF NOT EXISTS location_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lon REAL NOT NULL,
+        accuracy REAL,
+        sharing INTEGER DEFAULT 1,
+        sharing_group_id INTEGER,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(username)
+    )''')
+
     db.commit()
     db.close()
     logger.info('Database initialized')
@@ -690,6 +702,136 @@ def api_notifications_mark_read():
     return jsonify({'ok': True})
 
 
+# ==================== FRIEND FINDER ====================
+
+@app.route('/api/location/update', methods=['POST'])
+@login_required
+def api_location_update():
+    """Captain posts their current position. Called every 60s."""
+    data = request.get_json()
+    if not data or 'lat' not in data or 'lon' not in data:
+        return jsonify({'error': 'lat/lon required'}), 400
+
+    lat = float(data['lat'])
+    lon = float(data['lon'])
+    accuracy = float(data.get('accuracy', 0))
+    sharing = 1 if data.get('sharing', True) else 0
+    group_id = data.get('group_id')
+
+    db = get_db()
+    db.execute('''
+        INSERT INTO location_updates
+            (username, lat, lon, accuracy, sharing, sharing_group_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(username) DO UPDATE SET
+            lat = excluded.lat,
+            lon = excluded.lon,
+            accuracy = excluded.accuracy,
+            sharing = excluded.sharing,
+            sharing_group_id = excluded.sharing_group_id,
+            updated_at = CURRENT_TIMESTAMP
+    ''', (session['username'], lat, lon, accuracy, sharing, group_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/location/sharing', methods=['POST'])
+@login_required
+def api_location_toggle():
+    """Toggle sharing on/off or change which crew sees you."""
+    data = request.get_json()
+    sharing = 1 if data.get('sharing') else 0
+    group_id = data.get('group_id')
+    db = get_db()
+    db.execute('''
+        INSERT INTO location_updates
+            (username, lat, lon, sharing, sharing_group_id, updated_at)
+        VALUES (?, 0, 0, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(username) DO UPDATE SET
+            sharing = excluded.sharing,
+            sharing_group_id = excluded.sharing_group_id,
+            updated_at = CURRENT_TIMESTAMP
+    ''', (session['username'], sharing, group_id))
+    db.commit()
+    return jsonify({'sharing': bool(sharing), 'group_id': group_id})
+
+
+@app.route('/api/location/crew', methods=['GET'])
+@login_required
+def api_location_crew():
+    """
+    Get live positions of crew members visible to the requesting captain,
+    plus their catches logged today.
+    """
+    db = get_db()
+    username = session['username']
+
+    my_groups = db.execute(
+        'SELECT group_id FROM group_members WHERE username = ?',
+        (username,)).fetchall()
+    my_group_ids = [r['group_id'] for r in my_groups]
+
+    if not my_group_ids:
+        return jsonify({'members': [], 'catches': []})
+
+    placeholders = ','.join(['?' for _ in my_group_ids])
+    cutoff = (datetime.now() - timedelta(hours=2)).isoformat()
+
+    members = db.execute(f'''
+        SELECT lu.username, lu.lat, lu.lon, lu.accuracy, lu.updated_at,
+               lu.sharing_group_id
+        FROM location_updates lu
+        WHERE lu.username != ?
+          AND lu.sharing = 1
+          AND lu.sharing_group_id IN ({placeholders})
+          AND lu.updated_at > ?
+          AND lu.lat != 0 AND lu.lon != 0
+    ''', [username] + my_group_ids + [cutoff]).fetchall()
+
+    from captain_advisor import LOGS_DIR
+    today = datetime.now().strftime('%Y-%m-%d')
+    sharing_usernames = set(r['username'] for r in members)
+
+    catches = []
+    for fp in globmod.glob(os.path.join(LOGS_DIR, 'catch_*.json')):
+        try:
+            with open(fp) as f:
+                entry = json.load(f)
+            if entry.get('logged_by') not in sharing_usernames:
+                continue
+            if not entry.get('timestamp', '').startswith(today):
+                continue
+            catches.append({
+                'username': entry.get('logged_by', ''),
+                'species': entry.get('species', ''),
+                'technique': entry.get('technique', ''),
+                'lure': entry.get('lure', ''),
+                'gps': entry.get('gps'),
+                'time': entry.get('timestamp', '')[11:16],
+            })
+        except Exception:
+            pass
+
+    return jsonify({
+        'members': [dict(m) for m in members],
+        'catches': catches,
+    })
+
+
+@app.route('/api/location/status', methods=['GET'])
+@login_required
+def api_location_status():
+    """Get current sharing status for this captain."""
+    db = get_db()
+    row = db.execute(
+        'SELECT sharing, sharing_group_id FROM location_updates WHERE username = ?',
+        (session['username'],)).fetchone()
+    return jsonify({
+        'sharing': bool(row['sharing']) if row else True,
+        'group_id': row['sharing_group_id'] if row else None,
+    })
+
+
 # ==================== SMS WEBHOOK ====================
 
 def _looks_like_catch(text):
@@ -1040,6 +1182,24 @@ def render_legal_page(page_type):
         <p>GPS coordinates shared within a Friend Group are never used in
         aggregate analysis and are never visible to anyone outside that specific
         group — including other crews you belong to.</p>
+
+        <h3>Friend Finder</h3>
+        <p>Wheelhouse includes an optional live location feature called Friend Finder.
+        When enabled, your GPS coordinates are shared in real time with members of
+        a specific crew you choose at the start of each session. You control which
+        crew can see you, and you can turn sharing off at any time from the map screen.</p>
+
+        <p>Location sharing is separate from catch log sharing. Enabling Friend Finder
+        does not automatically share your catch logs, and sharing your catches with a
+        crew does not automatically enable Friend Finder. Each is controlled
+        independently.</p>
+
+        <p>When Friend Finder is active, crew members can see your live position and
+        your catches logged today including GPS coordinates. When you disable sharing
+        or close the app, your position is removed from the map within 2 hours.</p>
+
+        <p>Your location data is never used in aggregate analysis, never shared outside
+        your chosen crew, and is not stored beyond 2 hours of inactivity.</p>
 
         <h3>Aggregate Analysis</h3>
         <p>Anonymized catch data — species and technique only — may be used in

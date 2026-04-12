@@ -781,6 +781,19 @@ body {
 .fi-back:active { opacity: 0.6; }
 
 /* ==================== HAMBURGER NAV ==================== */
+/* Location sharing toggle */
+#location-sharing-toggle:checked + #loc-share-slider { background: var(--green); }
+#loc-share-slider::before {
+  content:''; position:absolute; height:18px; width:18px; left:3px; bottom:3px;
+  background:#fff; border-radius:50%; transition:0.2s;
+}
+#location-sharing-toggle:checked + #loc-share-slider::before { transform:translateX(20px); }
+
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper { background:transparent!important; box-shadow:none!important; padding:0!important; }
+.leaflet-popup-tip { display:none!important; }
+.leaflet-popup-close-button { display:none!important; }
+
 .nav-burger {
   position: fixed;
   top: 12px; left: 12px;
@@ -890,6 +903,8 @@ body {
   <button class="nav-link" onclick="navToggle();advisorToggle()"><span class="nav-link-icon">🧠</span> Advisor</button>
   <button class="nav-link" onclick="navToggle();catchToggle()"><span class="nav-link-icon">🐟</span> Log Catch</button>
   <button class="nav-link" onclick="navTo('fi-sec-catches')"><span class="nav-link-icon">📒</span> Catch History</button>
+  <div class="nav-divider"></div>
+  <button class="nav-link" onclick="navToggle();showCrewMap()"><span class="nav-link-icon">📍</span> Friend Finder</button>
   <div class="nav-divider"></div>
   <button class="nav-link" onclick="navTo('fi-sec-info')"><span class="nav-link-icon">ℹ️</span> About / Help</button>
   <button class="nav-link" onclick="navToggle();suggestOpen()"><span class="nav-link-icon">💬</span> Send Suggestion</button>
@@ -1076,6 +1091,39 @@ body {
     <button id="transfer-captain-btn" onclick="transferCaptain()" style="width:100%;margin-top:12px;padding:12px;background:transparent;border:1px solid #3A3A3C;color:#8E8E93;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:1px;cursor:pointer;display:none;">Transfer Captain Role</button>
     <button onclick="leaveGroup()" style="width:100%;margin-top:12px;padding:12px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;">Leave Group</button>
   </div>
+</div>
+
+<!-- ==================== FRIEND FINDER MAP ==================== -->
+<div id="crew-map-section" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);">CREW MAP</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" id="map-status-text">Loading...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:12px;color:var(--text-muted);" id="sharing-label">Sharing</span>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;">
+        <input type="checkbox" id="location-sharing-toggle" onchange="toggleLocationSharing()" checked style="opacity:0;width:0;height:0;">
+        <span style="position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:0.2s;" id="loc-share-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div style="margin-bottom:12px;background:var(--bg-primary);border-radius:6px;padding:10px 12px;">
+    <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">SHARING WITH</div>
+    <select id="crew-selector" onchange="updateSharingCrew()" style="width:100%;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-size:14px;font-family:inherit;">
+      <option value="">Nobody (dark)</option>
+    </select>
+  </div>
+
+  <div id="crew-map" style="border-radius:6px;overflow:hidden;height:340px;background:#0D1F2D;border:1px solid var(--border);"></div>
+
+  <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 8px;">ON THE WATER</div>
+  <div id="crew-list" style="background:var(--bg-primary);border-radius:6px;overflow:hidden;">
+    <div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center;">No crew members sharing location</div>
+  </div>
+
+  <button onclick="hideCrewMap()" style="width:100%;margin-top:14px;padding:10px;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;">CLOSE MAP</button>
 </div>
 
 <!-- ==================== SMS ADMIN MONITOR ==================== -->
@@ -3408,6 +3456,280 @@ window.openSmsConvo = async function(phoneFull, phoneDisplay) {
   } catch(e) { document.getElementById('sms-modal-messages').innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load messages.</div>'; }
 };
 window.closeSmsModal = function() { document.getElementById('sms-modal').style.display='none'; };
+
+// ==================== FRIEND FINDER MAP ====================
+
+var crewMap = null;
+var crewMarkers = {};
+var catchMarkers = [];
+var locationWatchId = null;
+var currentLat = null;
+var currentLon = null;
+var locationSharingOn = true;
+var sharingGroupId = null;
+var locationUpdateTimer = null;
+var crewPollTimer = null;
+
+window.showCrewMap = function() {
+  document.getElementById('crew-map-section').style.display = 'block';
+  document.getElementById('crew-map-section').scrollIntoView({behavior:'smooth'});
+  initMap();
+};
+
+window.hideCrewMap = function() {
+  document.getElementById('crew-map-section').style.display = 'none';
+  if (locationWatchId !== null) {
+    navigator.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
+  if (locationUpdateTimer) { clearInterval(locationUpdateTimer); locationUpdateTimer = null; }
+  if (crewPollTimer) { clearTimeout(crewPollTimer); crewPollTimer = null; }
+};
+
+function initMap() {
+  if (crewMap) { crewMap.invalidateSize(); return; }
+
+  if (!window.L) {
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    var script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = function() { buildMap(); };
+    document.head.appendChild(script);
+  } else {
+    buildMap();
+  }
+}
+
+function buildMap() {
+  crewMap = L.map('crew-map', { zoomControl: false }).setView([41.56, -69.99], 11);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '',
+    maxZoom: 16,
+  }).addTo(crewMap);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(crewMap);
+
+  startLocationSharing();
+  loadCrewSelector();
+  pollCrewLocations();
+}
+
+function startLocationSharing() {
+  if (!navigator.geolocation) return;
+
+  locationWatchId = navigator.geolocation.watchPosition(
+    function(pos) {
+      currentLat = pos.coords.latitude;
+      currentLon = pos.coords.longitude;
+      postLocationUpdate();
+    },
+    function(err) {
+      console.warn('Geolocation error:', err.message);
+      document.getElementById('map-status-text').textContent = 'Location unavailable';
+    },
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+  );
+
+  locationUpdateTimer = setInterval(postLocationUpdate, 60000);
+}
+
+async function postLocationUpdate() {
+  if (!currentLat || !currentLon) return;
+  try {
+    await fetch('/api/location/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat: currentLat,
+        lon: currentLon,
+        sharing: locationSharingOn,
+        group_id: sharingGroupId,
+      })
+    });
+  } catch(e) {}
+}
+
+async function loadCrewSelector() {
+  try {
+    var res = await fetch('/api/groups');
+    var data = await res.json();
+    var groups = data.groups || [];
+    var sel = document.getElementById('crew-selector');
+    // Clear existing options except first
+    while (sel.options.length > 1) sel.remove(1);
+
+    groups.forEach(function(g) {
+      var opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      sel.appendChild(opt);
+    });
+
+    var statusRes = await fetch('/api/location/status');
+    var status = await statusRes.json();
+    document.getElementById('location-sharing-toggle').checked = status.sharing;
+    locationSharingOn = status.sharing;
+    if (status.group_id) {
+      sel.value = status.group_id;
+      sharingGroupId = status.group_id;
+    }
+    updateSharingLabel();
+  } catch(e) {}
+}
+
+window.updateSharingCrew = async function() {
+  var sel = document.getElementById('crew-selector');
+  sharingGroupId = sel.value ? parseInt(sel.value) : null;
+  locationSharingOn = !!sharingGroupId;
+  document.getElementById('location-sharing-toggle').checked = locationSharingOn;
+  updateSharingLabel();
+  await postLocationUpdate();
+};
+
+window.toggleLocationSharing = async function() {
+  locationSharingOn = document.getElementById('location-sharing-toggle').checked;
+  if (!locationSharingOn) {
+    sharingGroupId = null;
+    document.getElementById('crew-selector').value = '';
+  }
+  updateSharingLabel();
+  try {
+    await fetch('/api/location/sharing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sharing: locationSharingOn, group_id: sharingGroupId })
+    });
+  } catch(e) {}
+};
+
+function updateSharingLabel() {
+  var label = document.getElementById('sharing-label');
+  var statusText = document.getElementById('map-status-text');
+  if (!locationSharingOn) {
+    label.style.color = 'var(--text-muted)';
+    label.textContent = 'Dark';
+    if (statusText) statusText.textContent = 'Not sharing location';
+  } else {
+    label.style.color = 'var(--green)';
+    label.textContent = 'Sharing';
+    var sel = document.getElementById('crew-selector');
+    var crewName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'crew';
+    if (statusText) statusText.textContent = 'Visible to ' + crewName;
+  }
+}
+
+async function pollCrewLocations() {
+  try {
+    var res = await fetch('/api/location/crew');
+    var data = await res.json();
+    updateCrewMap(data.members || [], data.catches || []);
+    updateCrewList(data.members || []);
+  } catch(e) {}
+  crewPollTimer = setTimeout(pollCrewLocations, 30000);
+}
+
+function updateCrewMap(members, catches) {
+  if (!crewMap) return;
+
+  var activeUsernames = {};
+  members.forEach(function(member) {
+    activeUsernames[member.username] = true;
+    var initials = member.username.slice(0, 2).toUpperCase();
+    var icon = L.divIcon({
+      html: '<div style="background:#1C3A5E;border:2px solid var(--accent);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:11px;font-weight:600;font-family:inherit;">'+initials+'</div>',
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+
+    var popup = '<div style="font-family:inherit;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:6px;font-size:13px;border:1px solid var(--border);">'+
+      '<div style="font-weight:700;margin-bottom:4px;">'+member.username+'</div>'+
+      '<div style="color:var(--text-muted);font-size:11px;">Updated '+new Date(member.updated_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+
+    if (crewMarkers[member.username]) {
+      crewMarkers[member.username].setLatLng([member.lat, member.lon]);
+    } else {
+      crewMarkers[member.username] = L.marker([member.lat, member.lon], { icon: icon })
+        .bindPopup(popup)
+        .addTo(crewMap);
+    }
+  });
+
+  Object.keys(crewMarkers).forEach(function(username) {
+    if (username !== '_self' && !activeUsernames[username]) {
+      crewMap.removeLayer(crewMarkers[username]);
+      delete crewMarkers[username];
+    }
+  });
+
+  catchMarkers.forEach(function(m) { crewMap.removeLayer(m); });
+  catchMarkers = [];
+
+  var catchIcon = L.divIcon({
+    html: '<div style="width:10px;height:10px;background:var(--green);border:1.5px solid #fff;border-radius:50%;"></div>',
+    className: '',
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+
+  catches.forEach(function(c) {
+    if (!c.gps || !c.gps.lat || !c.gps.lon) return;
+    var popup = '<div style="font-family:inherit;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:6px;font-size:13px;border:1px solid var(--border);">'+
+      '<div style="font-weight:700;margin-bottom:2px;">'+(c.species||'Catch')+'</div>'+
+      '<div style="color:var(--text-muted);">'+(c.technique||'')+' &middot; '+(c.lure||'')+'</div>'+
+      '<div style="color:var(--text-muted);margin-top:2px;">'+c.username+' &middot; '+c.time+'</div></div>';
+    var marker = L.marker([c.gps.lat, c.gps.lon], { icon: catchIcon })
+      .bindPopup(popup)
+      .addTo(crewMap);
+    catchMarkers.push(marker);
+  });
+
+  if (currentLat && currentLon) {
+    if (!crewMarkers['_self']) {
+      var selfIcon = L.divIcon({
+        html: '<div style="width:14px;height:14px;background:var(--accent);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 3px rgba(0,136,204,0.3)"></div>',
+        className: '',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+      crewMarkers['_self'] = L.marker([currentLat, currentLon], { icon: selfIcon })
+        .bindPopup('<div style="font-family:inherit;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:6px;font-size:13px;border:1px solid var(--border);">You</div>')
+        .addTo(crewMap);
+    } else {
+      crewMarkers['_self'].setLatLng([currentLat, currentLon]);
+    }
+  }
+}
+
+function updateCrewList(members) {
+  var el = document.getElementById('crew-list');
+  if (!members.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center;">No crew members sharing location</div>';
+    return;
+  }
+  el.innerHTML = members.map(function(m, i) {
+    return '<div style="padding:10px 12px;'+(i < members.length-1 ? 'border-bottom:1px solid var(--border-light);' : '')+
+      'display:flex;gap:10px;align-items:center;">'+
+      '<div style="width:32px;height:32px;background:var(--accent-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid var(--accent);">'+
+        '<span style="color:var(--accent);font-size:11px;font-weight:700;">'+m.username.slice(0,2).toUpperCase()+'</span>'+
+      '</div>'+
+      '<div style="flex:1;">'+
+        '<div style="color:var(--text-primary);font-size:13px;font-weight:600;">'+m.username+'</div>'+
+        '<div style="color:var(--green);font-size:11px;margin-top:2px;">On the water &middot; updated '+new Date(m.updated_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+
+      '</div>'+
+      '<button onclick="flyToMember('+m.lat+','+m.lon+')" style="background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--accent);font-size:11px;padding:4px 8px;cursor:pointer;font-family:inherit;font-weight:700;letter-spacing:1px;">FIND</button>'+
+    '</div>';
+  }).join('');
+}
+
+window.flyToMember = function(lat, lon) {
+  if (crewMap) crewMap.flyTo([lat, lon], 13, { duration: 1.5 });
+};
 
 // Init all new features
 initPhoneSection();
