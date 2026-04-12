@@ -291,6 +291,235 @@ def api_suggestion():
     logger.info(f'Suggestion received from {username}: {text[:100]}')
     return jsonify({'sent': True})
 
+# ==================== LEGAL PAGES (Twilio A2P compliance) ====================
+
+@app.route('/privacy')
+def privacy():
+    return render_legal_page('privacy')
+
+@app.route('/terms')
+def terms():
+    return render_legal_page('terms')
+
+def render_legal_page(page_type):
+    if page_type == 'privacy':
+        title = 'Privacy Policy'
+        content = '''
+        <h2>Privacy Policy</h2>
+        <p class="updated">Last updated: April 2026</p>
+
+        <h3>What We Collect</h3>
+        <p>Wheelhouse collects the information you provide when creating an account
+        (username, password), your phone number if you choose to register it, catch
+        logs you submit including location names and optional GPS coordinates, and
+        conversation history with the Wheelhouse advisor.</p>
+
+        <h3>How We Use It</h3>
+        <p>Your data is used solely to operate the Wheelhouse service — to authenticate
+        you, provide fishing intelligence, save your catch logs, and send SMS messages
+        you have requested. We do not sell, share, or license your data to third parties.</p>
+
+        <h3>SMS Messaging</h3>
+        <p>By registering your phone number you consent to receive SMS messages from
+        Wheelhouse including verification codes, advisor responses to your questions,
+        and Friend Group catch notifications from captains you have chosen to connect
+        with. Message and data rates may apply. Text STOP at any time to unsubscribe.
+        Text HELP for support.</p>
+
+        <h3>Catch Log Data</h3>
+        <p>Your catch logs including spot names and GPS coordinates are private to your
+        account by default. If you join a Friend Group and enable catch sharing, spot
+        names (not GPS coordinates) are visible to group members. GPS coordinates are
+        never shared with other users under any circumstance.</p>
+
+        <h3>Aggregate Analysis</h3>
+        <p>Anonymized catch data — species, technique, and spot names with all
+        identifying information removed — may be used in aggregate to improve fishing
+        pattern predictions for all users. No individual catch data is attributable
+        to you in this analysis.</p>
+
+        <h3>Data Storage</h3>
+        <p>Your data is stored on a private server located in Chatham, Massachusetts.
+        We do not use third-party cloud storage for your personal data.</p>
+
+        <h3>Third-Party Services</h3>
+        <p>Wheelhouse uses Twilio to deliver SMS messages and Anthropic\'s Claude API
+        to power the fishing advisor. Your messages may pass through these services
+        to fulfill your requests.
+        <a href="https://www.twilio.com/legal/privacy" target="_blank">Twilio Privacy Policy</a> &middot;
+        <a href="https://www.anthropic.com/privacy" target="_blank">Anthropic Privacy Policy</a></p>
+
+        <h3>Data Retention</h3>
+        <p>Your data is retained as long as your account is active. You may request
+        deletion of your account and all associated data by contacting
+        <a href="mailto:mgiorgio@rednun.com">mgiorgio@rednun.com</a>.</p>
+
+        <h3>Contact</h3>
+        <p>For privacy questions or data deletion requests:<br>
+        <a href="mailto:mgiorgio@rednun.com">mgiorgio@rednun.com</a></p>
+        '''
+    else:
+        title = 'Terms of Service'
+        content = '''
+        <h2>Terms of Service</h2>
+        <p class="updated">Last updated: April 2026</p>
+
+        <h3>Acceptance</h3>
+        <p>By creating an account or using Wheelhouse, you agree to these terms.
+        If you do not agree, do not use the service.</p>
+
+        <h3>The Service</h3>
+        <p>Wheelhouse provides AI-assisted fishing intelligence including tidal data,
+        weather conditions, oceanographic analysis, and fishing recommendations for
+        the Monomoy / Chatham, Massachusetts area. The service is intended for use
+        by licensed charter boat captains and recreational anglers.</p>
+
+        <h3>No Warranty</h3>
+        <p>Wheelhouse is provided as-is. Fishing recommendations, conditions
+        forecasts, and advisor responses are informational only and do not
+        constitute professional maritime or safety advice. Always exercise your
+        own judgment on the water. Weather and ocean conditions can change rapidly.
+        The operator of Wheelhouse is not responsible for decisions made based on
+        information provided by this service.</p>
+
+        <h3>Safety</h3>
+        <p>Nothing in this service overrides your responsibility to follow safe
+        boating practices, applicable maritime regulations, and your own judgment
+        regarding sea conditions. Always file a float plan. Always carry appropriate
+        safety equipment.</p>
+
+        <h3>SMS Messaging</h3>
+        <p>By registering your phone number you agree to receive SMS messages from
+        Wheelhouse as described in our Privacy Policy. Message and data rates may
+        apply. You can opt out at any time by texting STOP. For help text HELP or
+        contact mgiorgio@rednun.com.</p>
+
+        <h3>Accounts</h3>
+        <p>You are responsible for maintaining the confidentiality of your account
+        credentials. You may not share your account or use the service to provide
+        access to unauthorized users.</p>
+
+        <h3>Catch Data</h3>
+        <p>You retain ownership of the catch data you log. By submitting catch data
+        you grant Wheelhouse a limited license to use that data in anonymized
+        aggregate form to improve predictions for all users, as described in the
+        Privacy Policy.</p>
+
+        <h3>Prohibited Use</h3>
+        <p>You may not use Wheelhouse to violate any applicable fishing regulations,
+        licensing requirements, or maritime law. You may not attempt to reverse
+        engineer, scrape, or abuse the service.</p>
+
+        <h3>Changes</h3>
+        <p>These terms may be updated at any time. Continued use of the service
+        after changes constitutes acceptance of the updated terms.</p>
+
+        <h3>Contact</h3>
+        <p><a href="mailto:mgiorgio@rednun.com">mgiorgio@rednun.com</a></p>
+        '''
+
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wheelhouse — {title}</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: #f0f4f8;
+      color: #1a2a3a;
+      font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 0;
+    }}
+    header {{
+      background: #ffffff;
+      border-bottom: 1px solid #c8d6e0;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .logo {{
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #1a2a3a;
+      text-decoration: none;
+    }}
+    .logo span {{ color: #0077aa; }}
+    .back-link {{
+      font-size: 13px;
+      color: #0077aa;
+      text-decoration: none;
+    }}
+    .back-link:hover {{ text-decoration: underline; }}
+    main {{
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }}
+    h2 {{
+      font-size: 26px;
+      font-weight: 700;
+      color: #1a2a3a;
+      margin-bottom: 6px;
+    }}
+    h3 {{
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      margin-top: 28px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      color: #0077aa;
+    }}
+    p {{
+      color: #2a3a4a;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }}
+    .updated {{
+      font-size: 13px;
+      color: #7a8a9a;
+      margin-bottom: 32px;
+    }}
+    a {{
+      color: #0077aa;
+      text-decoration: none;
+    }}
+    a:hover {{ text-decoration: underline; }}
+    footer {{
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: #9aa8b8;
+      border-top: 1px solid #c8d6e0;
+      background: #fff;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <a class="logo" href="/">&#9875; WHEEL<span>HOUSE</span></a>
+    <a class="back-link" href="/">&#8592; Back to app</a>
+  </header>
+  <main>
+    {content}
+  </main>
+  <footer>
+    &copy; 2026 Wheelhouse &middot; Chatham, MA &middot;
+    <a href="/privacy">Privacy</a> &middot;
+    <a href="/terms">Terms</a>
+  </footer>
+</body>
+</html>'''
+
+    return html
+
+
 # Register routes
 from fishing_intel import register_routes as register_fishing_routes
 from captain_advisor import register_advisor_routes
