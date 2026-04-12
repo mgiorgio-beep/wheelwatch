@@ -591,6 +591,95 @@ def get_continuous_wind(station='44020'):
     return _cached(f'cwind_{station}', 'buoy', fetch)
 
 
+# ==================== ERDDAP SST & CHLOROPHYLL ====================
+
+ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap'
+
+MONOMOY_POINTS = {
+    'sound_side':    {'lat': 41.66, 'lon': -70.03, 'name': 'Stage Harbor / Sound Side'},
+    'monomoy_tip':   {'lat': 41.53, 'lon': -69.99, 'name': 'Monomoy Tip'},
+    'stonehorse':    {'lat': 41.52, 'lon': -70.00, 'name': 'Stonehorse Shoal'},
+    'east_atlantic': {'lat': 41.55, 'lon': -69.88, 'name': 'East Atlantic Side'},
+    'offshore':      {'lat': 41.38, 'lon': -69.75, 'name': 'Offshore (SE)'},
+}
+
+def _kelvin_to_f(k):
+    return round((k - 273.15) * 9/5 + 32, 1)
+
+def _fetch_erddap_point(dataset, variable, lat, lon, delta=0.05, valid_range=None):
+    url = (
+        f'{ERDDAP_BASE}/{dataset}.json'
+        f'?{variable}[(last)][({lat-delta:.3f}):({lat+delta:.3f})]'
+        f'[({lon-delta:.3f}):({lon+delta:.3f})]'
+    )
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    rows = data['table']['rows']
+    values = [row[-1] for row in rows if row[-1] is not None]
+    # Filter by valid range if specified (e.g., SST in Kelvin should be 250-320)
+    if valid_range:
+        values = [v for v in values if valid_range[0] <= v <= valid_range[1]]
+    return sum(values) / len(values) if values else None
+
+def get_erddap_conditions():
+    def fetch():
+        sst_data = {}
+        chla_data = {}
+
+        for key, pt in MONOMOY_POINTS.items():
+            try:
+                k = _fetch_erddap_point('jplMURSST41', 'analysed_sst', pt['lat'], pt['lon'],
+                                        valid_range=(250, 320))
+                if k is not None:
+                    sst_data[key] = {
+                        'name': pt['name'],
+                        'temp_f': _kelvin_to_f(k),
+                        'temp_c': round(k - 273.15, 1),
+                    }
+            except Exception as e:
+                logger.warning(f'SST fetch failed for {key}: {e}')
+
+        for key in ('sound_side', 'stonehorse', 'east_atlantic'):
+            pt = MONOMOY_POINTS[key]
+            for dataset in ('erdMH1chla1day', 'erdMH1chla8day'):
+                try:
+                    chl = _fetch_erddap_point(dataset, 'chlor_a', pt['lat'], pt['lon'], delta=0.1,
+                                             valid_range=(0, 100))
+                    if chl is not None:
+                        chla_data[key] = {
+                            'name': pt['name'],
+                            'chlor_a': round(chl, 3),
+                            'source': '1-day' if '1day' in dataset else '8-day composite',
+                        }
+                        break
+                except Exception as e:
+                    logger.warning(f'Chlorophyll {dataset} failed for {key}: {e}')
+
+        gradient = None
+        if 'sound_side' in sst_data and 'east_atlantic' in sst_data:
+            diff = sst_data['sound_side']['temp_f'] - sst_data['east_atlantic']['temp_f']
+            gradient = {
+                'sound_f': sst_data['sound_side']['temp_f'],
+                'atlantic_f': sst_data['east_atlantic']['temp_f'],
+                'difference_f': round(diff, 1),
+                'summary': (
+                    f"Sound side {sst_data['sound_side']['temp_f']}F vs "
+                    f"Atlantic side {sst_data['east_atlantic']['temp_f']}F "
+                    f"({'+' if diff > 0 else ''}{diff:.1f}F gradient)"
+                )
+            }
+
+        return {
+            'sst': sst_data,
+            'chlorophyll': chla_data,
+            'temp_gradient': gradient,
+            'fetched': datetime.now().isoformat(),
+        }
+
+    return _cached('erddap_conditions', 'tides', fetch)
+
+
 # ==================== CAPTAIN'S BRIEFING ====================
 
 def get_briefing():
@@ -625,6 +714,9 @@ def get_briefing():
 
     # Tide chart data
     briefing['tide_chart'] = get_tide_hourly('chatham', 48)
+
+    # ERDDAP satellite SST & chlorophyll
+    briefing['erddap'] = get_erddap_conditions()
 
     return briefing
 
@@ -734,6 +826,12 @@ def register_routes(app, login_required):
                 'capecod': {'bbox': BBOX_CAPECOD, 'label': 'Cape Cod (wide)'},
             }
         })
+
+    @app.route('/api/fishing/erddap')
+    @login_required
+    def api_fishing_erddap():
+        data = get_erddap_conditions()
+        return jsonify(data) if data else (jsonify({'error': 'unavailable'}), 503)
 
     # Serve the fishing page
     @app.route('/fishing')

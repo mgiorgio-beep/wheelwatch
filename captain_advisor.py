@@ -214,6 +214,26 @@ def get_live_data_context():
         ctx.append(f"  Wind: {wdir}° at {wspd}m/s, gusts {gst}m/s")
         ctx.append("")
 
+    # SST & Chlorophyll from ERDDAP satellite data
+    erddap = briefing.get('erddap')
+    if erddap:
+        sst = erddap.get('sst', {})
+        chl = erddap.get('chlorophyll', {})
+        gradient = erddap.get('temp_gradient')
+        if sst:
+            ctx.append("SEA SURFACE TEMPERATURE (MUR Satellite, 1km):")
+            for key, pt in sst.items():
+                ctx.append(f"  {pt['name']}: {pt['temp_f']}F ({pt['temp_c']}C)")
+            if gradient:
+                ctx.append(f"  >> TEMP GRADIENT: {gradient['summary']}")
+            ctx.append("")
+        if chl:
+            ctx.append("CHLOROPHYLL-a / BAIT CONCENTRATION (MODIS):")
+            for key, pt in chl.items():
+                level = 'LOW' if pt['chlor_a'] < 0.5 else ('HIGH' if pt['chlor_a'] > 2.0 else 'MODERATE')
+                ctx.append(f"  {pt['name']}: {pt['chlor_a']} mg/m3 ({level}) [{pt['source']}]")
+            ctx.append("")
+
     return "\n".join(ctx)
 
 
