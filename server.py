@@ -30,6 +30,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), 'wheelhouse.db')
 NOTIFY_EMAIL = 'mgiorgio@rednun.com'
 GMAIL_USER = os.environ.get('GMAIL_ADDRESS', '')
 GMAIL_PASS = os.environ.get('GMAIL_APP_PASSWORD', '')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 
 
 # ==================== EMAIL NOTIFICATIONS ====================
@@ -76,12 +77,13 @@ def init_db():
         hide_welcome INTEGER DEFAULT 0
     )''')
 
-    # Phone registration columns (safe to re-run)
+    # Additional columns (safe to re-run)
     for col_sql in [
         "ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN phone_verify_code TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN phone_verify_expires REAL DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
     ]:
         try:
             db.execute(col_sql)
@@ -200,7 +202,7 @@ def login():
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
         if not username or not password:
-            return render_auth_page('login', error='Enter username and password')
+            return render_auth_page('login', error='Enter email and password')
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         if user and check_password_hash(user['password_hash'], password):
@@ -208,21 +210,21 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect('/')
-        return render_auth_page('login', error='Invalid username or password')
+        return render_auth_page('login', error='Invalid email or password')
     return render_auth_page('login')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    import re
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
+        phone = request.form.get('phone', '').strip()
         if not username or not password:
-            return render_auth_page('signup', error='All fields required')
-        if len(username) < 2 or len(username) > 20:
-            return render_auth_page('signup', error='Username must be 2-20 characters')
-        if not username.isalnum():
-            return render_auth_page('signup', error='Username: letters and numbers only')
+            return render_auth_page('signup', error='Email and password required')
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', username):
+            return render_auth_page('signup', error='Enter a valid email address')
         if len(password) < 4:
             return render_auth_page('signup', error='Password must be at least 4 characters')
         if password != confirm:
@@ -230,7 +232,7 @@ def signup():
         db = get_db()
         existing = db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
         if existing:
-            return render_auth_page('signup', error='Username already taken')
+            return render_auth_page('signup', error='Email already registered')
         pw_hash = generate_password_hash(password)
         db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, pw_hash))
         db.commit()
@@ -238,11 +240,20 @@ def signup():
         session.permanent = True
         session['user_id'] = user['id']
         session['username'] = user['username']
+        # Save phone if provided (unverified — they can verify from Settings)
+        if phone:
+            phone_clean = ''.join(c for c in phone if c.isdigit() or c == '+')
+            if not phone_clean.startswith('+'):
+                phone_clean = '+1' + phone_clean
+            if len(phone_clean) >= 10:
+                db.execute('UPDATE users SET phone_number = ? WHERE id = ?',
+                           (phone_clean, user['id']))
+                db.commit()
         logger.info('New user registered: {}'.format(username))
         send_notification(
-            '⚓ Wheelhouse — New User: {}'.format(username),
-            'New account created on Wheelhouse.\n\nUsername: {}\nTime: {}\n\nhttps://wheelhouse.rednun.com'.format(
-                username, datetime.now().strftime('%B %d, %Y %I:%M %p'))
+            'Wheelhouse — New User: {}'.format(username),
+            'New account created on Wheelhouse.\n\nEmail: {}\nPhone: {}\nTime: {}\n\nhttps://wheelhouse.rednun.com'.format(
+                username, phone or 'not provided', datetime.now().strftime('%B %d, %Y %I:%M %p'))
         )
         return redirect('/')
     return render_auth_page('signup')
@@ -252,9 +263,19 @@ def render_auth_page(mode, error=None):
     if mode == 'signup':
         form = '''
         <form method="POST">
-        <input type="text" name="username" placeholder="Choose a username" autocomplete="username" autofocus>
+        <input type="email" name="username" placeholder="Email address" autocomplete="email" autofocus>
         <input type="password" name="password" placeholder="Password" autocomplete="new-password">
         <input type="password" name="confirm" placeholder="Confirm password" autocomplete="new-password">
+        <div style="margin:12px 0 4px;text-align:left">
+          <div style="font-size:12px;font-weight:600;color:#1a2a3a;margin-bottom:6px">Phone number <span style="color:#7a8a9a;font-weight:400">(optional)</span></div>
+          <input type="tel" name="phone" placeholder="(617) 555-1234" autocomplete="tel" style="margin-bottom:6px">
+          <div style="font-size:11px;color:#0077aa;line-height:1.4;margin-bottom:4px">
+            With phone: SMS catch alerts from your crew, weather/conditions texts, and text-based advisor access.
+          </div>
+          <div style="font-size:11px;color:#7a8a9a;line-height:1.4">
+            Without phone: Full app access &mdash; no text notifications. You can always add your phone later in Settings.
+          </div>
+        </div>
         <button type="submit">CREATE ACCOUNT</button>
         </form>
         <div class="link">Already have an account? <a href="/login">Log in</a></div>
@@ -263,7 +284,7 @@ def render_auth_page(mode, error=None):
     else:
         form = '''
         <form method="POST">
-        <input type="text" name="username" placeholder="Username" autocomplete="username" autofocus>
+        <input type="email" name="username" placeholder="Email" autocomplete="email" autofocus>
         <input type="password" name="password" placeholder="Password" autocomplete="current-password">
         <button type="submit">LOG IN</button>
         </form>
@@ -297,7 +318,7 @@ def logout():
 @login_required
 def api_user_profile():
     db = get_db()
-    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified FROM users WHERE id = ?',
+    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified, is_admin FROM users WHERE id = ?',
                       (session['user_id'],)).fetchone()
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -306,6 +327,7 @@ def api_user_profile():
         'hide_welcome': bool(user['hide_welcome']),
         'phone_number': user['phone_number'],
         'phone_verified': bool(user['phone_verified']),
+        'is_admin': bool(user['is_admin']),
     })
 
 @app.route('/api/user/hide-welcome', methods=['POST'])
@@ -1057,7 +1079,7 @@ def _get_admin_username():
         try:
             db = sqlite3.connect(DB_PATH)
             db.row_factory = sqlite3.Row
-            user = db.execute('SELECT username FROM users ORDER BY id ASC LIMIT 1').fetchone()
+            user = db.execute('SELECT username FROM users WHERE is_admin = 1 LIMIT 1').fetchone()
             _ADMIN_USERNAME = user['username'] if user else ''
             db.close()
         except Exception:
@@ -1386,6 +1408,332 @@ def render_legal_page(page_type):
 </body>
 </html>'''
 
+    return html
+
+
+# ==================== ADMIN DASHBOARD ====================
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.cookies.get('wh_admin')
+        if not auth or auth != ADMIN_PASSWORD or not ADMIN_PASSWORD:
+            return redirect('/admin/login')
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = None
+    if request.method == 'POST':
+        pw = request.form.get('password', '')
+        if pw == ADMIN_PASSWORD and ADMIN_PASSWORD:
+            resp = redirect('/admin')
+            resp.set_cookie('wh_admin', pw, httponly=True, samesite='Strict', max_age=86400*30)
+            return resp
+        error = 'Wrong password'
+    return f'''<!DOCTYPE html>
+<html><head><title>Wheelhouse Admin</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{{background:#111214;color:#fff;font-family:-apple-system,sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}}
+  .box{{background:#1C1C1E;border-radius:16px;padding:32px;width:320px;border:1px solid #2C2C2E}}
+  h2{{margin:0 0 24px;font-size:20px;letter-spacing:-0.5px}}
+  input{{width:100%;background:#2C2C2E;border:none;border-radius:10px;
+         padding:12px 14px;color:#fff;font-size:15px;box-sizing:border-box;margin-bottom:12px}}
+  button{{width:100%;background:#0A84FF;border:none;border-radius:10px;
+          padding:12px;color:#fff;font-size:15px;font-weight:600;cursor:pointer}}
+  .err{{color:#FF453A;font-size:13px;margin-bottom:12px}}
+</style></head><body>
+<div class="box">
+  <h2>Wheelhouse Admin</h2>
+  {"<div class='err'>" + error + "</div>" if error else ""}
+  <form method="POST">
+    <input type="password" name="password" placeholder="Password" autofocus>
+    <button type="submit">Sign In</button>
+  </form>
+</div></body></html>'''
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    resp = redirect('/admin/login')
+    resp.delete_cookie('wh_admin')
+    return resp
+
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    db = get_db()
+
+    # Users
+    users = db.execute('''
+        SELECT username, created_at, is_admin,
+               phone_number, phone_verified,
+               (SELECT COUNT(*) FROM group_members gm WHERE gm.username = u.username) as crew_count
+        FROM users u
+        ORDER BY created_at DESC
+    ''').fetchall()
+
+    # Crews
+    groups = db.execute('''
+        SELECT g.id, g.name, g.code, g.created_at,
+               COUNT(gm.username) as member_count,
+               (SELECT username FROM group_members WHERE group_id = g.id AND role = 'captain' LIMIT 1) as captain
+        FROM friend_groups g
+        LEFT JOIN group_members gm ON gm.group_id = g.id
+        GROUP BY g.id
+        ORDER BY g.created_at DESC
+    ''').fetchall()
+
+    # Crew members per group
+    group_members_map = {}
+    for grp in groups:
+        members = db.execute('''
+            SELECT username, role, share_my_catches as sharing_enabled,
+                   joined_at
+            FROM group_members
+            WHERE group_id = ?
+            ORDER BY role DESC, joined_at ASC
+        ''', (grp['id'],)).fetchall()
+        group_members_map[grp['id']] = [dict(m) for m in members]
+
+    # SMS stats (safe queries)
+    try:
+        sms_total = db.execute('SELECT COUNT(*) FROM sms_conversations').fetchone()[0]
+        sms_inbound = db.execute(
+            "SELECT COUNT(*) FROM sms_conversations WHERE direction='inbound'"
+        ).fetchone()[0]
+        sms_unique = db.execute(
+            'SELECT COUNT(DISTINCT phone_number) FROM sms_conversations'
+        ).fetchone()[0]
+    except Exception:
+        sms_total = sms_inbound = sms_unique = 0
+
+    # SMS trial users (table may not exist)
+    trial_users = []
+    try:
+        trial_users = db.execute(
+            'SELECT phone_number, message_count, first_seen FROM sms_trial ORDER BY message_count DESC'
+        ).fetchall()
+    except Exception:
+        pass
+
+    # Catch logs
+    catch_files = globmod.glob('/opt/wheelhouse/logs/catch_*.json')
+    catch_count = len(catch_files)
+    catches_by_user = {}
+    for fp in catch_files:
+        try:
+            with open(fp) as f:
+                e = json.load(f)
+            u = e.get('logged_by', 'unknown')
+            catches_by_user[u] = catches_by_user.get(u, 0) + 1
+        except Exception:
+            pass
+
+    # Conditions log
+    try:
+        conditions_count = db.execute('SELECT COUNT(*) FROM conditions_log').fetchone()[0]
+        latest_conditions = db.execute(
+            'SELECT date, snapshot_hour, sst_gradient_f, tide_direction, solunar_rating '
+            'FROM conditions_log ORDER BY logged_at DESC LIMIT 1'
+        ).fetchone()
+    except Exception:
+        conditions_count = 0
+        latest_conditions = None
+
+    # Location sharing — who is currently active
+    cutoff = (datetime.now() - timedelta(hours=2)).isoformat()
+    active_locations = db.execute('''
+        SELECT username, sharing, sharing_group_id, updated_at
+        FROM location_updates
+        WHERE updated_at > ? AND lat != 0
+        ORDER BY updated_at DESC
+    ''', (cutoff,)).fetchall()
+
+    # Pattern engine status
+    try:
+        from pattern_intel import get_pattern_prediction
+        pattern_status = get_pattern_prediction()
+    except Exception as e:
+        pattern_status = {'status': 'error', 'message': str(e)}
+
+    def row(label, value, color='#fff'):
+        return (f'<tr><td style="color:#8E8E93;padding:8px 0;font-size:13px;width:180px">{label}</td>'
+                f'<td style="color:{color};font-size:13px;font-weight:500">{value}</td></tr>')
+
+    def section(title):
+        return (f'<h2 style="font-size:16px;font-weight:600;color:#fff;margin:32px 0 12px;'
+                f'padding-bottom:8px;border-bottom:1px solid #2C2C2E">{title}</h2>')
+
+    def card(content):
+        return (f'<div style="background:#1C1C1E;border-radius:14px;padding:16px 20px;'
+                f'margin-bottom:12px;border:1px solid #2C2C2E">{content}</div>')
+
+    # Latest conditions string
+    if latest_conditions:
+        lc_str = (f"{latest_conditions['date']} {latest_conditions['snapshot_hour']}:00 "
+                  f"&mdash; {latest_conditions['tide_direction'] or 'n/a'}, "
+                  f"gradient {latest_conditions['sst_gradient_f'] or 'n/a'}&deg;F")
+    else:
+        lc_str = 'None'
+
+    # Pattern summary (truncate if long)
+    p_summary = pattern_status.get('summary', '&mdash;')
+    if len(p_summary) > 120:
+        p_summary = p_summary[:120] + '...'
+    p_color = '#34C759' if pattern_status.get('status') == 'ok' else '#FF9F0A'
+
+    html = f'''<!DOCTYPE html>
+<html><head><title>Wheelhouse Admin</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#111214;color:#fff;font-family:-apple-system,sans-serif;padding:24px;max-width:900px;margin:0 auto}}
+  table{{width:100%;border-collapse:collapse}}
+  .pill{{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}}
+  .green{{background:#34C75918;color:#34C759;border:1px solid #34C75930}}
+  .gray{{background:#3A3A3C;color:#8E8E93}}
+  .blue{{background:#0A84FF18;color:#0A84FF;border:1px solid #0A84FF30}}
+  .red{{background:#FF453A18;color:#FF453A;border:1px solid #FF453A30}}
+  a{{color:#0A84FF;text-decoration:none}}
+</style></head><body>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <div>
+    <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px">Admin</div>
+    <div style="color:#8E8E93;font-size:13px;margin-top:2px">Wheelhouse &middot; {datetime.now().strftime("%b %d %Y %H:%M")}</div>
+  </div>
+  <a href="/admin/logout" style="color:#8E8E93;font-size:13px">Sign out</a>
+</div>
+
+{section("Overview")}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px">
+  <div style="background:#1C1C1E;border-radius:12px;padding:14px;border:1px solid #2C2C2E">
+    <div style="color:#8E8E93;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Captains</div>
+    <div style="color:#fff;font-size:26px;font-weight:700;margin-top:4px">{len(users)}</div>
+  </div>
+  <div style="background:#1C1C1E;border-radius:12px;padding:14px;border:1px solid #2C2C2E">
+    <div style="color:#8E8E93;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Crews</div>
+    <div style="color:#fff;font-size:26px;font-weight:700;margin-top:4px">{len(groups)}</div>
+  </div>
+  <div style="background:#1C1C1E;border-radius:12px;padding:14px;border:1px solid #2C2C2E">
+    <div style="color:#8E8E93;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Catches logged</div>
+    <div style="color:#fff;font-size:26px;font-weight:700;margin-top:4px">{catch_count}</div>
+  </div>
+  <div style="background:#1C1C1E;border-radius:12px;padding:14px;border:1px solid #2C2C2E">
+    <div style="color:#8E8E93;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">SMS messages</div>
+    <div style="color:#fff;font-size:26px;font-weight:700;margin-top:4px">{sms_total}</div>
+  </div>
+</div>
+
+{section("Pattern Engine")}
+{card(f"""<table>
+  {row("Status", pattern_status.get('status','unknown'), p_color)}
+  {row("Conditions logged", str(conditions_count))}
+  {row("Latest snapshot", lc_str)}
+  {row("Pattern summary", p_summary)}
+</table>""")}
+
+{section(f"Captains ({len(users)})")}
+'''
+
+    for u in users:
+        phone_status = ('<span class="pill green">Verified</span>' if u['phone_verified'] else
+                       f'<span class="pill gray">{u["phone_number"] or "No phone"}</span>')
+        catch_ct = catches_by_user.get(u['username'], 0)
+        admin_pill = '<span class="pill blue">admin</span> ' if u['is_admin'] else ''
+        html += card(f'''
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+  <div>
+    <div style="font-size:15px;font-weight:600">{u["username"]}</div>
+    <div style="color:#8E8E93;font-size:12px;margin-top:3px">Joined {str(u["created_at"])[:10]}</div>
+  </div>
+  <div style="text-align:right;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+    {admin_pill}{phone_status}
+    <span class="pill blue">{u["crew_count"]} crew{"s" if u["crew_count"] != 1 else ""}</span>
+    <span class="pill {"green" if catch_ct > 0 else "gray"}">{catch_ct} catch{"es" if catch_ct != 1 else ""}</span>
+  </div>
+</div>''')
+
+    # CREWS
+    html += section(f"Crews ({len(groups)})")
+    if groups:
+        for grp in groups:
+            members = group_members_map.get(grp['id'], [])
+            member_rows = ''.join([
+                f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #2C2C2E">'
+                f'<span style="color:#fff;font-size:13px">{m["username"]}</span>'
+                f'<div style="display:flex;gap:6px">'
+                f'<span class="pill {"blue" if m["role"]=="captain" else "gray"}">{m["role"]}</span>'
+                f'<span class="pill {"green" if m["sharing_enabled"] else "gray"}">{"sharing" if m["sharing_enabled"] else "dark"}</span>'
+                f'</div></div>'
+                for m in members
+            ])
+            html += card(f'''
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <div>
+    <div style="font-size:15px;font-weight:600">{grp["name"]}</div>
+    <div style="color:#8E8E93;font-size:12px;margin-top:2px">Code: {grp["code"]} &middot; {grp["member_count"]} members &middot; created {str(grp["created_at"])[:10]}</div>
+  </div>
+</div>
+{member_rows if member_rows else '<div style="color:#48484A;font-size:13px">No members</div>'}''')
+    else:
+        html += card('<div style="color:#48484A;font-size:13px">No crews created yet</div>')
+
+    # SMS
+    html += section("SMS")
+    html += card(f'''<table>
+  {row("Total messages", str(sms_total))}
+  {row("Inbound messages", str(sms_inbound))}
+  {row("Unique phone numbers", str(sms_unique))}
+  {row("Trial users", str(len(trial_users)))}
+</table>''')
+
+    if trial_users:
+        trial_rows = ''.join([
+            f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #2C2C2E">'
+            f'<span style="color:#8E8E93;font-size:13px">{t["phone_number"]}</span>'
+            f'<span class="pill {"red" if t["message_count"]>=4 else "gray"}">{t["message_count"]}/5 messages</span>'
+            f'</div>'
+            for t in trial_users
+        ])
+        html += card(f'<div style="font-size:13px;color:#8E8E93;margin-bottom:8px;text-transform:uppercase;'
+                     f'letter-spacing:0.4px;font-size:11px">Trial numbers</div>{trial_rows}')
+
+    # FRIEND FINDER
+    html += section("Friend Finder &mdash; Currently Active")
+    if active_locations:
+        loc_rows = ''.join([
+            f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #2C2C2E">'
+            f'<span style="color:#fff;font-size:13px">{loc["username"]}</span>'
+            f'<div style="display:flex;gap:6px">'
+            f'<span class="pill {"green" if loc["sharing"] else "gray"}">{"sharing" if loc["sharing"] else "dark"}</span>'
+            f'<span style="color:#8E8E93;font-size:12px">{str(loc["updated_at"])[11:16]}</span>'
+            f'</div></div>'
+            for loc in active_locations
+        ])
+        html += card(loc_rows)
+    else:
+        html += card('<div style="color:#48484A;font-size:13px">No captains active on the water right now</div>')
+
+    # CATCHES BY CAPTAIN
+    if catches_by_user:
+        html += section("Catch Log Activity")
+        catch_rows = ''.join([
+            f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #2C2C2E">'
+            f'<span style="color:#fff;font-size:13px">{u}</span>'
+            f'<span class="pill green">{c} catch{"es" if c!=1 else ""}</span>'
+            f'</div>'
+            for u, c in sorted(catches_by_user.items(), key=lambda x: x[1], reverse=True)
+        ])
+        html += card(catch_rows)
+
+    html += '</body></html>'
     return html
 
 
