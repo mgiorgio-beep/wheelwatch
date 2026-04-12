@@ -604,7 +604,10 @@ MONOMOY_POINTS = {
 }
 
 def _kelvin_to_f(k):
-    return round((k - 273.15) * 9/5 + 32, 1)
+    """Convert to Fahrenheit. Handles both Kelvin (>200) and Celsius."""
+    if k > 200:
+        return round((k - 273.15) * 9/5 + 32, 1)
+    return round(k * 9/5 + 32, 1)
 
 def _fetch_erddap_point(dataset, variable, lat, lon, delta=0.05, valid_range=None):
     url = (
@@ -630,12 +633,12 @@ def get_erddap_conditions():
         for key, pt in MONOMOY_POINTS.items():
             try:
                 k = _fetch_erddap_point('jplMURSST41', 'analysed_sst', pt['lat'], pt['lon'],
-                                        valid_range=(250, 320))
+                                        valid_range=(-2, 320))
                 if k is not None:
                     sst_data[key] = {
                         'name': pt['name'],
                         'temp_f': _kelvin_to_f(k),
-                        'temp_c': round(k - 273.15, 1),
+                        'temp_c': round(k - 273.15, 1) if k > 200 else round(k, 1),
                     }
             except Exception as e:
                 logger.warning(f'SST fetch failed for {key}: {e}')

@@ -1,9 +1,9 @@
 """
-Wheelhouse Conditions Logger — runs daily via cron at 6 AM.
-Snapshots SST, chlorophyll, tides, buoy, solunar, and weather to SQLite.
+Wheelhouse Conditions Logger — runs 3x daily via cron (6 AM, noon, 6 PM).
+Snapshots SST, chlorophyll, tides (tide-relative), buoy, solunar, and weather to SQLite.
 """
 
-import os, sys, sqlite3, logging
+import os, sys, sqlite3, logging, math
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -44,13 +44,28 @@ def init_table():
         major_period_1 TEXT, major_period_2 TEXT,
         air_temp_f REAL, wind_speed_nws TEXT, wind_dir_nws TEXT, forecast_short TEXT
     )''')
+    # Add tide-relative and trend columns (safe if already exist)
+    for col in [
+        "ALTER TABLE conditions_log ADD COLUMN snapshot_hour INTEGER DEFAULT 6",
+        "ALTER TABLE conditions_log ADD COLUMN tide_hours_to_next_high REAL",
+        "ALTER TABLE conditions_log ADD COLUMN tide_hours_since_last_high REAL",
+        "ALTER TABLE conditions_log ADD COLUMN tide_direction TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN tide_strength TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN sst_trend TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN chl_trend TEXT",
+    ]:
+        try:
+            db.execute(col)
+        except Exception:
+            pass
     db.commit()
     db.close()
 
 
 def snapshot():
-    today = datetime.now().strftime('%Y-%m-%d')
-    row = {'date': today}
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    row = {'date': today, 'snapshot_hour': now.hour}
 
     # ERDDAP
     try:
@@ -68,6 +83,52 @@ def snapshot():
         logger.info(f'ERDDAP: gradient={row.get("sst_gradient_f")}F')
     except Exception as e:
         logger.error(f'ERDDAP failed: {e}')
+
+    # SST trend — compare to previous snapshot at same hour
+    try:
+        db_check = sqlite3.connect(DB_PATH)
+        db_check.row_factory = sqlite3.Row
+        yesterday = db_check.execute('''
+            SELECT sst_gradient_f FROM conditions_log
+            WHERE snapshot_hour = ?
+            ORDER BY date DESC LIMIT 1
+        ''', (row.get('snapshot_hour', 6),)).fetchone()
+        db_check.close()
+
+        today_grad = row.get('sst_gradient_f')
+        if yesterday and yesterday['sst_gradient_f'] and today_grad:
+            diff = today_grad - yesterday['sst_gradient_f']
+            if diff > 0.5:
+                row['sst_trend'] = 'strengthening'
+            elif diff < -0.5:
+                row['sst_trend'] = 'weakening'
+            else:
+                row['sst_trend'] = 'stable'
+    except Exception as e:
+        logger.error(f'SST trend failed: {e}')
+
+    # Chlorophyll trend
+    try:
+        db_check = sqlite3.connect(DB_PATH)
+        db_check.row_factory = sqlite3.Row
+        yesterday_chl = db_check.execute('''
+            SELECT chl_stonehorse FROM conditions_log
+            WHERE snapshot_hour = ?
+            ORDER BY date DESC LIMIT 1
+        ''', (row.get('snapshot_hour', 6),)).fetchone()
+        db_check.close()
+
+        today_chl = row.get('chl_stonehorse')
+        if yesterday_chl and yesterday_chl['chl_stonehorse'] and today_chl:
+            diff = today_chl - yesterday_chl['chl_stonehorse']
+            if diff > 0.1:
+                row['chl_trend'] = 'building'
+            elif diff < -0.1:
+                row['chl_trend'] = 'falling'
+            else:
+                row['chl_trend'] = 'stable'
+    except Exception as e:
+        logger.error(f'Chlorophyll trend failed: {e}')
 
     # Buoy
     try:
@@ -89,20 +150,60 @@ def snapshot():
     except Exception as e:
         logger.error(f'Buoy failed: {e}')
 
-    # Tides
+    # Tides — compute tide-relative fields
     try:
         tides = get_tides('chatham')
         if tides and tides.get('predictions'):
-            now = datetime.now()
-            nearest = None
+            preds = tides['predictions']
+
+            prev_high = None
             next_high = None
-            for p in tides['predictions']:
+            prev_low = None
+            next_low = None
+
+            for p in preds:
+                t = datetime.strptime(p['t'], '%Y-%m-%d %H:%M')
+                diff_hr = (t - now).total_seconds() / 3600
+                hilo = p['type']
+                val = float(p['v'])
+
+                if hilo == 'H':
+                    if diff_hr < 0 and (prev_high is None or diff_hr > prev_high[0]):
+                        prev_high = (diff_hr, val, t)
+                    if diff_hr > 0 and (next_high is None or diff_hr < next_high[0]):
+                        next_high = (diff_hr, val, t)
+                else:
+                    if diff_hr < 0 and (prev_low is None or diff_hr > prev_low[0]):
+                        prev_low = (diff_hr, val, t)
+                    if diff_hr > 0 and (next_low is None or diff_hr < next_low[0]):
+                        next_low = (diff_hr, val, t)
+
+            if next_high:
+                row['tide_hours_to_next_high'] = round(next_high[0], 2)
+                row['next_high_ft'] = next_high[1]
+            if prev_high:
+                row['tide_hours_since_last_high'] = round(abs(prev_high[0]), 2)
+
+            # Direction: flooding if next high is sooner than next low
+            if next_high and next_low:
+                row['tide_direction'] = 'flooding' if next_high[0] < next_low[0] else 'ebbing'
+
+            # Tide height at snapshot — sine interpolation
+            if prev_high and next_high:
+                cycle_hrs = next_high[0] - prev_high[0]
+                elapsed = abs(prev_high[0])
+                if cycle_hrs > 0:
+                    phase = math.pi * elapsed / cycle_hrs
+                    approx_ht = prev_high[1] + (next_high[1] - prev_high[1]) * (1 - math.cos(phase)) / 2
+                    row['tide_height_ft'] = round(approx_ht, 1)
+
+            # Tide phase label (keep for backward compat)
+            nearest = None
+            for p in preds:
                 t = datetime.strptime(p['t'], '%Y-%m-%d %H:%M')
                 diff_hr = (t - now).total_seconds() / 3600
                 if nearest is None or abs(diff_hr) < abs(nearest[0]):
                     nearest = (diff_hr, p['type'], float(p['v']))
-                if p['type'] == 'H' and diff_hr > 0 and (next_high is None or diff_hr < next_high[0]):
-                    next_high = (diff_hr, float(p['v']))
             if nearest:
                 diff_hr, hilo, val = nearest
                 if abs(diff_hr) < 0.5:
@@ -111,11 +212,16 @@ def snapshot():
                     row['tide_phase'] = 'rising' if hilo == 'H' else 'falling'
                 else:
                     row['tide_phase'] = 'falling' if hilo == 'H' else 'rising'
-                row['tide_height_ft'] = val
-            if next_high:
-                row['next_high_hours'] = round(next_high[0], 2)
-                row['next_high_ft'] = next_high[1]
-        logger.info(f'Tides: {row.get("tide_phase")}')
+
+            # Spring vs neap: spring tides near new/full moon
+            try:
+                lunar = get_lunar()
+                moon_illum = lunar['illumination']
+                row['tide_strength'] = 'spring' if (moon_illum < 15 or moon_illum > 85) else 'neap'
+            except Exception:
+                pass
+
+            logger.info(f'Tides: {row.get("tide_direction")} {row.get("tide_hours_to_next_high")}hrs to high')
     except Exception as e:
         logger.error(f'Tides failed: {e}')
 
@@ -153,7 +259,7 @@ def snapshot():
     db.execute(f'INSERT INTO conditions_log ({cols}) VALUES ({placeholders})', list(row.values()))
     db.commit()
     db.close()
-    logger.info(f'Snapshot saved for {today}')
+    logger.info(f'Snapshot saved for {today} hour={row["snapshot_hour"]}')
     return row
 
 

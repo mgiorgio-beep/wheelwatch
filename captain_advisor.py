@@ -242,6 +242,32 @@ def get_live_data_context():
         ctx.append(f"  Total vessels: {ais['total']}")
         ctx.append("")
 
+    # Historical pattern prediction (tide-relative, v2)
+    try:
+        from pattern_intel import get_pattern_prediction
+
+        current_hour = datetime.now().hour
+        patterns = get_pattern_prediction(trip_hour=current_hour)
+
+        if patterns.get('status') == 'ok':
+            ctx.append("HISTORICAL PATTERN ANALYSIS (tide-relative matching):")
+            ctx.append(f"  {patterns['summary']}")
+            if patterns.get('tide_direction') and patterns.get('tide_hours_to_high') is not None:
+                hrs = abs(patterns['tide_hours_to_high'])
+                direction = patterns['tide_direction']
+                to_from = 'to' if patterns['tide_hours_to_high'] > 0 else 'past'
+                ctx.append(f"  Matched on: {direction} tide, {hrs:.1f}hrs {to_from} high, "
+                           f"{patterns.get('tide_strength','')} conditions")
+            ctx.append(f"  Based on {patterns['days_logged']} days of logged conditions.")
+            ctx.append("")
+        elif patterns.get('status') == 'seeding':
+            ctx.append(f"PATTERN ENGINE: {patterns['message']}")
+            if patterns.get('seasonal_note'):
+                ctx.append(f"  {patterns['seasonal_note']}")
+            ctx.append("")
+    except Exception as e:
+        logger.warning(f'Pattern intel v2 failed: {e}')
+
     return "\n".join(ctx)
 
 
