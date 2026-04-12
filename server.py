@@ -1,7 +1,12 @@
 import os
+import json
 import sqlite3
 import logging
 import smtplib
+import random
+import string
+import glob as globmod
+import time as time_module
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from flask import Flask, send_from_directory, session, request, redirect, jsonify, g
@@ -70,6 +75,68 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         hide_welcome INTEGER DEFAULT 0
     )''')
+
+    # Phone registration columns (safe to re-run)
+    for col_sql in [
+        "ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN phone_verify_code TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN phone_verify_expires REAL DEFAULT NULL",
+    ]:
+        try:
+            db.execute(col_sql)
+        except Exception:
+            pass
+
+    db.execute('''CREATE TABLE IF NOT EXISTS friend_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        code TEXT UNIQUE NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    db.execute('''CREATE TABLE IF NOT EXISTS group_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        share_my_catches INTEGER DEFAULT 1,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(group_id, username),
+        FOREIGN KEY(group_id) REFERENCES friend_groups(id)
+    )''')
+
+    db.execute('''CREATE TABLE IF NOT EXISTS group_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        group_name TEXT NOT NULL,
+        from_user TEXT NOT NULL,
+        to_user TEXT NOT NULL,
+        spot TEXT,
+        species TEXT,
+        message TEXT,
+        read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    db.execute('''CREATE TABLE IF NOT EXISTS sms_conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone_number TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        body TEXT NOT NULL,
+        twilio_sid TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    db.execute('''CREATE TABLE IF NOT EXISTS sms_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone_number TEXT NOT NULL UNIQUE,
+        history TEXT DEFAULT '[]',
+        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        message_count INTEGER DEFAULT 0
+    )''')
+
     db.commit()
     db.close()
     logger.info('Database initialized')
@@ -218,13 +285,15 @@ def logout():
 @login_required
 def api_user_profile():
     db = get_db()
-    user = db.execute('SELECT username, hide_welcome FROM users WHERE id = ?',
+    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified FROM users WHERE id = ?',
                       (session['user_id'],)).fetchone()
     if not user:
         return jsonify({'error': 'User not found'}), 404
     return jsonify({
         'username': user['username'],
         'hide_welcome': bool(user['hide_welcome']),
+        'phone_number': user['phone_number'],
+        'phone_verified': bool(user['phone_verified']),
     })
 
 @app.route('/api/user/hide-welcome', methods=['POST'])
@@ -290,6 +359,591 @@ def api_suggestion():
     )).start()
     logger.info(f'Suggestion received from {username}: {text[:100]}')
     return jsonify({'sent': True})
+
+# ==================== TWILIO CONFIG ====================
+
+TWILIO_SID   = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+TWILIO_FROM  = os.environ.get('TWILIO_PHONE_NUMBER', '')
+
+def get_twilio_client():
+    from twilio.rest import Client as TwilioClient
+    return TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+
+def _send_sms(to_number, body):
+    """Send an SMS via Twilio. Returns True on success."""
+    if not TWILIO_SID or not TWILIO_TOKEN:
+        logger.error('Twilio not configured')
+        return False
+    try:
+        client = get_twilio_client()
+        client.messages.create(to=to_number, from_=TWILIO_FROM, body=body)
+        return True
+    except Exception as e:
+        logger.error(f'SMS send failed: {e}')
+        return False
+
+def sms_reply(to_number, body):
+    """Send an SMS reply via Twilio. Splits long messages automatically."""
+    if not TWILIO_SID or not TWILIO_TOKEN:
+        logger.error('Twilio credentials not configured')
+        return False
+    try:
+        client = get_twilio_client()
+        max_len = 1550
+        if len(body) <= max_len:
+            msg = client.messages.create(to=to_number, from_=TWILIO_FROM, body=body)
+            logger.info(f'SMS sent to {to_number[-4:]}****: {msg.sid}')
+        else:
+            chunks = []
+            current = ''
+            for sentence in body.replace('. ', '.|').split('|'):
+                if len(current) + len(sentence) < max_len:
+                    current += sentence + ' '
+                else:
+                    if current: chunks.append(current.strip())
+                    current = sentence + ' '
+            if current: chunks.append(current.strip())
+            for i, chunk in enumerate(chunks):
+                prefix = f'({i+1}/{len(chunks)}) ' if len(chunks) > 1 else ''
+                client.messages.create(to=to_number, from_=TWILIO_FROM,
+                                       body=prefix + chunk)
+        return True
+    except Exception as e:
+        logger.error(f'Twilio send failed: {e}')
+        return False
+
+
+# ==================== PHONE REGISTRATION ====================
+
+@app.route('/api/user/phone/register', methods=['POST'])
+@login_required
+def api_phone_register():
+    data = request.get_json()
+    phone = data.get('phone', '').strip() if data else ''
+    phone = ''.join(c for c in phone if c.isdigit() or c == '+')
+    if not phone.startswith('+'):
+        phone = '+1' + phone
+    if len(phone) < 10:
+        return jsonify({'error': 'Invalid phone number'}), 400
+    db = get_db()
+    existing = db.execute(
+        'SELECT id, username FROM users WHERE phone_number = ? AND phone_verified = 1',
+        (phone,)).fetchone()
+    if existing and existing['username'] != session['username']:
+        return jsonify({'error': 'Phone number already registered'}), 409
+    code = str(random.randint(100000, 999999))
+    expires = time_module.time() + 600
+    db.execute('''UPDATE users SET phone_number = ?, phone_verify_code = ?,
+                  phone_verify_expires = ?, phone_verified = 0
+                  WHERE id = ?''',
+               (phone, code, expires, session['user_id']))
+    db.commit()
+    sent = _send_sms(phone,
+        f"Wheelhouse verification code: {code}\n"
+        f"Expires in 10 minutes. Do not share this code.")
+    if not sent:
+        return jsonify({'error': 'Could not send SMS. Check the number and try again.'}), 500
+    logger.info(f'Verification code sent to {phone[-4:]}**** for {session["username"]}')
+    return jsonify({'sent': True, 'phone': phone})
+
+@app.route('/api/user/phone/verify', methods=['POST'])
+@login_required
+def api_phone_verify():
+    data = request.get_json()
+    code = data.get('code', '').strip() if data else ''
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if not user['phone_verify_code']:
+        return jsonify({'error': 'No verification pending'}), 400
+    if time_module.time() > (user['phone_verify_expires'] or 0):
+        return jsonify({'error': 'Code expired. Request a new one.'}), 400
+    if code != user['phone_verify_code']:
+        return jsonify({'error': 'Incorrect code'}), 400
+    db.execute('''UPDATE users SET phone_verified = 1,
+                  phone_verify_code = NULL, phone_verify_expires = NULL
+                  WHERE id = ?''', (session['user_id'],))
+    db.commit()
+    logger.info(f'Phone verified for {session["username"]}: {user["phone_number"][-4:]}****')
+    _send_sms(user['phone_number'],
+        f"Wheelhouse ready. Text this number anytime for conditions, "
+        f"tides, and fishing intel.\n\n"
+        f"To log a catch just text it naturally:\n"
+        f"\"28lb striper Stonehorse white bucktail flood\"\n\n"
+        f"Text HELP for commands.")
+    return jsonify({'verified': True})
+
+@app.route('/api/user/phone/remove', methods=['POST'])
+@login_required
+def api_phone_remove():
+    db = get_db()
+    db.execute('''UPDATE users SET phone_number = NULL, phone_verified = 0,
+                  phone_verify_code = NULL, phone_verify_expires = NULL
+                  WHERE id = ?''', (session['user_id'],))
+    db.commit()
+    return jsonify({'removed': True})
+
+
+# ==================== FRIEND GROUPS ====================
+
+def _generate_invite_code():
+    words = ['MONOMOY','POLLOCK','CHATHAM','SHOALS','STRIPER',
+             'BLUEFISH','STAGHAR','STONHRS','BEARSE','REDNUN']
+    return random.choice(words) + ''.join(random.choices(string.digits, k=2))
+
+@app.route('/api/groups', methods=['GET'])
+@login_required
+def api_groups_list():
+    db = get_db()
+    rows = db.execute('''
+        SELECT g.id, g.name, g.code, g.created_by, g.created_at,
+               gm.role, gm.share_my_catches,
+               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count
+        FROM friend_groups g
+        JOIN group_members gm ON g.id = gm.group_id
+        WHERE gm.username = ?
+        ORDER BY g.created_at DESC
+    ''', (session['username'],)).fetchall()
+    return jsonify({'groups': [dict(r) for r in rows]})
+
+@app.route('/api/groups', methods=['POST'])
+@login_required
+def api_groups_create():
+    data = request.get_json()
+    name = data.get('name', '').strip() if data else ''
+    if not name or len(name) < 2:
+        return jsonify({'error': 'Group name required'}), 400
+    db = get_db()
+    code = _generate_invite_code()
+    while db.execute('SELECT id FROM friend_groups WHERE code = ?', (code,)).fetchone():
+        code = _generate_invite_code()
+    db.execute('INSERT INTO friend_groups (name, code, created_by) VALUES (?, ?, ?)',
+               (name, code, session['username']))
+    group_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    db.execute('INSERT INTO group_members (group_id, username, role) VALUES (?, ?, ?)',
+               (group_id, session['username'], 'captain'))
+    db.commit()
+    logger.info(f'Friend Group created: "{name}" ({code}) by {session["username"]}')
+    return jsonify({'group_id': group_id, 'code': code, 'name': name})
+
+@app.route('/api/groups/join', methods=['POST'])
+@login_required
+def api_groups_join():
+    data = request.get_json()
+    code = data.get('code', '').strip().upper() if data else ''
+    if not code:
+        return jsonify({'error': 'Invite code required'}), 400
+    db = get_db()
+    group = db.execute('SELECT * FROM friend_groups WHERE code = ?', (code,)).fetchone()
+    if not group:
+        return jsonify({'error': 'Invalid code'}), 404
+    if db.execute('SELECT id FROM group_members WHERE group_id = ? AND username = ?',
+                  (group['id'], session['username'])).fetchone():
+        return jsonify({'error': 'Already a member'}), 409
+    db.execute('INSERT INTO group_members (group_id, username, role) VALUES (?, ?, ?)',
+               (group['id'], session['username'], 'member'))
+    db.commit()
+    return jsonify({'group_id': group['id'], 'name': group['name']})
+
+@app.route('/api/groups/<int:group_id>/members', methods=['GET'])
+@login_required
+def api_group_members(group_id):
+    db = get_db()
+    if not db.execute('SELECT id FROM group_members WHERE group_id = ? AND username = ?',
+                      (group_id, session['username'])).fetchone():
+        return jsonify({'error': 'Not a member'}), 403
+    members = db.execute('''
+        SELECT username, role, share_my_catches, joined_at
+        FROM group_members WHERE group_id = ?
+        ORDER BY role DESC, joined_at ASC
+    ''', (group_id,)).fetchall()
+    return jsonify({'members': [dict(m) for m in members]})
+
+@app.route('/api/groups/<int:group_id>/sharing', methods=['POST'])
+@login_required
+def api_group_sharing_toggle(group_id):
+    data = request.get_json()
+    share = 1 if data.get('share') else 0
+    db = get_db()
+    db.execute('UPDATE group_members SET share_my_catches = ? WHERE group_id = ? AND username = ?',
+               (share, group_id, session['username']))
+    db.commit()
+    return jsonify({'sharing': bool(share)})
+
+@app.route('/api/groups/<int:group_id>/catches', methods=['GET'])
+@login_required
+def api_group_catches(group_id):
+    """Shared catches from group members who have opted in. GPS always omitted."""
+    db = get_db()
+    if not db.execute('SELECT id FROM group_members WHERE group_id = ? AND username = ?',
+                      (group_id, session['username'])).fetchone():
+        return jsonify({'error': 'Not a member'}), 403
+    sharing = db.execute(
+        'SELECT username FROM group_members WHERE group_id = ? AND share_my_catches = 1',
+        (group_id,)).fetchall()
+    sharing_users = set(r['username'] for r in sharing)
+    from captain_advisor import LOGS_DIR
+    files = sorted(globmod.glob(os.path.join(LOGS_DIR, 'catch_*.json')), reverse=True)
+    catches = []
+    for fp in files[:500]:
+        try:
+            with open(fp) as f:
+                entry = json.load(f)
+            if entry.get('logged_by') not in sharing_users:
+                continue
+            dt = datetime.fromisoformat(entry['timestamp'])
+            catches.append({
+                'date': dt.strftime('%b %d %I:%M %p'),
+                'captain': entry.get('logged_by', ''),
+                'spot': entry.get('spot', ''),
+                'species': entry.get('species', ''),
+                'technique': entry.get('technique', ''),
+                'lure': entry.get('lure', ''),
+                'notes': entry.get('notes', ''),
+            })
+        except Exception:
+            pass
+    return jsonify({'catches': catches[:100]})
+
+@app.route('/api/groups/<int:group_id>/leave', methods=['POST'])
+@login_required
+def api_group_leave(group_id):
+    db = get_db()
+    member = db.execute('SELECT * FROM group_members WHERE group_id = ? AND username = ?',
+                        (group_id, session['username'])).fetchone()
+    if not member:
+        return jsonify({'error': 'Not a member'}), 403
+    if member['role'] == 'captain':
+        count = db.execute('SELECT COUNT(*) as c FROM group_members WHERE group_id = ?',
+                           (group_id,)).fetchone()['c']
+        if count > 1:
+            return jsonify({'error': 'Assign a new captain before leaving'}), 400
+        db.execute('DELETE FROM friend_groups WHERE id = ?', (group_id,))
+    db.execute('DELETE FROM group_members WHERE group_id = ? AND username = ?',
+               (group_id, session['username']))
+    db.commit()
+    return jsonify({'left': True})
+
+
+# ==================== NOTIFICATIONS ====================
+
+@app.route('/api/notifications', methods=['GET'])
+@login_required
+def api_notifications():
+    db = get_db()
+    rows = db.execute('''
+        SELECT * FROM group_notifications
+        WHERE to_user = ? AND read = 0
+        ORDER BY created_at DESC LIMIT 20
+    ''', (session['username'],)).fetchall()
+    return jsonify({'notifications': [dict(r) for r in rows]})
+
+@app.route('/api/notifications/read', methods=['POST'])
+@login_required
+def api_notifications_mark_read():
+    db = get_db()
+    db.execute('UPDATE group_notifications SET read = 1 WHERE to_user = ?',
+               (session['username'],))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ==================== SMS WEBHOOK ====================
+
+def _looks_like_catch(text):
+    catch_keywords = [
+        'caught', 'landed', 'got a', 'nice', 'striper', 'bluefish', 'bass',
+        'albie', 'false albacore', 'bonito', 'fluke', 'tuna', 'lb', 'pound',
+        'inch', 'bucktail', 'eel', 'plug', 'jig', 'popper', 'slug-go',
+        'stonehorse', 'bearse', 'pollock rip', 'monomoy', 'stage harbor',
+        'nauset', 'chatham', 'high bank'
+    ]
+    question_keywords = [
+        '?', 'what', 'how', 'when', 'where', 'should', 'will', 'can',
+        'conditions', 'tide', 'weather', 'wind', 'ride', 'leaving',
+        'heading', 'going', 'plan', 'best', 'recommend'
+    ]
+    text_lower = text.lower()
+    catch_score = sum(1 for k in catch_keywords if k in text_lower)
+    question_score = sum(1 for k in question_keywords if k in text_lower)
+    return catch_score > question_score and catch_score >= 2
+
+def get_sms_history(phone_number, max_exchanges=8):
+    db = get_db()
+    row = db.execute('SELECT history FROM sms_sessions WHERE phone_number = ?',
+                     (phone_number,)).fetchone()
+    if not row:
+        return []
+    try:
+        history = json.loads(row['history'])
+        if len(history) > max_exchanges * 2:
+            history = history[-(max_exchanges * 2):]
+        return history
+    except Exception:
+        return []
+
+def save_sms_history(phone_number, history):
+    db = get_db()
+    db.execute('''
+        INSERT INTO sms_sessions (phone_number, history, last_active, message_count)
+        VALUES (?, ?, CURRENT_TIMESTAMP, 1)
+        ON CONFLICT(phone_number) DO UPDATE SET
+            history = excluded.history,
+            last_active = CURRENT_TIMESTAMP,
+            message_count = message_count + 1
+    ''', (phone_number, json.dumps(history)))
+    db.commit()
+
+def log_sms(phone_number, direction, body, twilio_sid=None):
+    db = get_db()
+    db.execute('''
+        INSERT INTO sms_conversations (phone_number, direction, body, twilio_sid)
+        VALUES (?, ?, ?, ?)
+    ''', (phone_number, direction, body, twilio_sid))
+    db.commit()
+
+@app.route('/api/sms/inbound', methods=['POST'])
+def sms_inbound():
+    """Twilio webhook — receives inbound SMS."""
+    if TWILIO_TOKEN:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(TWILIO_TOKEN)
+        signature = request.headers.get('X-Twilio-Signature', '')
+        if not validator.validate(request.url, request.form.to_dict(), signature):
+            logger.warning('Invalid Twilio signature — rejected')
+            return ('Forbidden', 403)
+
+    from_number = request.form.get('From', '')
+    body = request.form.get('Body', '').strip()
+    twilio_sid = request.form.get('MessageSid', '')
+
+    if not from_number or not body:
+        return ('', 204)
+
+    logger.info(f'SMS inbound from {from_number[-4:]}****: {body[:50]}')
+    log_sms(from_number, 'inbound', body, twilio_sid)
+
+    db = get_db()
+    user = db.execute(
+        'SELECT * FROM users WHERE phone_number = ? AND phone_verified = 1',
+        (from_number,)).fetchone()
+    username = user['username'] if user else None
+
+    body_lower = body.lower().strip()
+
+    if body_lower in ('stop', 'unsubscribe'):
+        return ('', 204)
+
+    if body_lower in ('reset', 'restart', 'clear'):
+        save_sms_history(from_number, [])
+        name = f" {username}" if username else ""
+        sms_reply(from_number,
+            f"Wheelhouse ready{name}. Ask me about conditions, tides, "
+            f"currents, or where to fish. Or just text a catch to log it.")
+        return ('', 204)
+
+    if body_lower in ('help', '?'):
+        sms_reply(from_number,
+            "Wheelhouse commands:\n"
+            "- Ask any fishing question\n"
+            "- Log a catch: \"28lb striper Stonehorse white bucktail\"\n"
+            "- RESET - clear conversation history\n"
+            "- STATUS - check your account\n\n"
+            + ("" if username else
+               "Register at wheelhouse.rednun.com to link your account."))
+        return ('', 204)
+
+    if body_lower == 'status':
+        if username:
+            sms_reply(from_number,
+                f"Logged in as {username}.\n"
+                f"Your catches and conversations are synced to your account.")
+        else:
+            sms_reply(from_number,
+                "Not linked to an account. Register at wheelhouse.rednun.com "
+                "and add your phone number in settings to sync your data.")
+        return ('', 204)
+
+    # Catch logging via SMS
+    if username and _looks_like_catch(body):
+        try:
+            from captain_advisor import ask_advisor, ANTHROPIC_API_KEY, ANTHROPIC_URL, MODEL
+            import requests as req
+
+            parse_prompt = (
+                f'Parse this fishing catch report into structured fields. '
+                f'Respond ONLY with valid JSON, no markdown:\n'
+                f'{{"spot":"","species":"","technique":"","lure":"","notes":""}}\n\n'
+                f'Transcript: "{body}"'
+            )
+            r = req.post(ANTHROPIC_URL,
+                headers={'Content-Type':'application/json',
+                         'x-api-key': ANTHROPIC_API_KEY,
+                         'anthropic-version': '2023-06-01'},
+                json={'model': MODEL, 'max_tokens': 300,
+                      'messages': [{'role':'user','content': parse_prompt}]},
+                timeout=15)
+            r.raise_for_status()
+            text = ''.join(b['text'] for b in r.json().get('content',[]) if b.get('type')=='text')
+            parsed = json.loads(text.strip())
+
+            from captain_advisor import _snapshot_conditions, LOGS_DIR
+            conditions = _snapshot_conditions()
+            entry = {
+                'timestamp': datetime.now().isoformat(),
+                'logged_by': username,
+                'spot': parsed.get('spot',''),
+                'gps': None,
+                'species': parsed.get('species',''),
+                'technique': parsed.get('technique',''),
+                'lure': parsed.get('lure',''),
+                'notes': parsed.get('notes', body),
+                'conditions': conditions,
+                'source': 'sms',
+            }
+            ts = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+            filepath = os.path.join(LOGS_DIR, f'catch_{ts}.json')
+            with open(filepath, 'w') as f:
+                json.dump(entry, f, indent=2)
+
+            logger.info(f'SMS catch logged for {username}: {parsed.get("spot","")} {parsed.get("species","")}')
+
+            # Notify Friend Groups via SMS
+            try:
+                groups = db.execute('''
+                    SELECT g.id, g.name FROM friend_groups g
+                    JOIN group_members gm ON g.id = gm.group_id
+                    WHERE gm.username = ? AND gm.share_my_catches = 1
+                ''', (username,)).fetchall()
+                for group in groups:
+                    members = db.execute('''
+                        SELECT u.phone_number, gm.username
+                        FROM group_members gm
+                        JOIN users u ON u.username = gm.username
+                        WHERE gm.group_id = ? AND gm.username != ?
+                        AND gm.share_my_catches = 1 AND u.phone_verified = 1
+                    ''', (group['id'], username)).fetchall()
+                    for member in members:
+                        species = entry.get('species','a fish')
+                        spot = entry.get('spot','')
+                        msg = f"[{group['name']}] {username} just logged {species}"
+                        if spot: msg += f" at {spot}"
+                        sms_reply(member['phone_number'], msg)
+            except Exception as e:
+                logger.error(f'Group SMS notification failed: {e}')
+
+            confirm = f"Logged: {parsed.get('species','catch')}"
+            if parsed.get('spot'): confirm += f" at {parsed['spot']}"
+            if parsed.get('technique'): confirm += f", {parsed['technique']}"
+            confirm += ". Check wheelhouse.rednun.com to see it."
+            sms_reply(from_number, confirm)
+            log_sms(from_number, 'outbound', confirm)
+            return ('', 204)
+
+        except Exception as e:
+            logger.error(f'SMS catch parse failed: {e}')
+
+    # Default — send to advisor
+    history = get_sms_history(from_number)
+    try:
+        from captain_advisor import ask_advisor
+        response = ask_advisor(history, body)
+    except Exception as e:
+        logger.error(f'Advisor failed for SMS: {e}')
+        response = "Sorry, the advisor is temporarily unavailable. Try again in a moment."
+
+    history.append({'role': 'user', 'content': body})
+    history.append({'role': 'assistant', 'content': response})
+    if len(history) > 16:
+        history = history[-16:]
+    save_sms_history(from_number, history)
+
+    log_sms(from_number, 'outbound', response)
+    sms_reply(from_number, response)
+    return ('', 204)
+
+
+# ==================== SMS ADMIN API ====================
+
+# Admin username — determined at startup from oldest account
+_ADMIN_USERNAME = None
+def _get_admin_username():
+    global _ADMIN_USERNAME
+    if _ADMIN_USERNAME is None:
+        try:
+            db = sqlite3.connect(DB_PATH)
+            db.row_factory = sqlite3.Row
+            user = db.execute('SELECT username FROM users ORDER BY id ASC LIMIT 1').fetchone()
+            _ADMIN_USERNAME = user['username'] if user else ''
+            db.close()
+        except Exception:
+            _ADMIN_USERNAME = ''
+    return _ADMIN_USERNAME
+
+@app.route('/api/sms/conversations')
+@login_required
+def api_sms_conversations():
+    if session.get('username') != _get_admin_username():
+        return jsonify({'error': 'Admin only'}), 403
+    db = get_db()
+    sessions_list = db.execute('''
+        SELECT phone_number, last_active, message_count
+        FROM sms_sessions
+        ORDER BY last_active DESC
+        LIMIT 50
+    ''').fetchall()
+    result = []
+    for s in sessions_list:
+        last = db.execute('''
+            SELECT body, direction, created_at FROM sms_conversations
+            WHERE phone_number = ?
+            ORDER BY created_at DESC LIMIT 1
+        ''', (s['phone_number'],)).fetchone()
+        result.append({
+            'phone': s['phone_number'][-4:] + '****',
+            'phone_full': s['phone_number'],
+            'last_active': s['last_active'],
+            'message_count': s['message_count'],
+            'last_message': dict(last) if last else None,
+        })
+    return jsonify({'conversations': result})
+
+@app.route('/api/sms/conversation/<path:phone>')
+@login_required
+def api_sms_conversation_detail(phone):
+    if session.get('username') != _get_admin_username():
+        return jsonify({'error': 'Admin only'}), 403
+    db = get_db()
+    messages = db.execute('''
+        SELECT direction, body, created_at, twilio_sid
+        FROM sms_conversations
+        WHERE phone_number = ?
+        ORDER BY created_at ASC
+    ''', (phone,)).fetchall()
+    return jsonify({'messages': [dict(m) for m in messages]})
+
+@app.route('/api/sms/stats')
+@login_required
+def api_sms_stats():
+    if session.get('username') != _get_admin_username():
+        return jsonify({'error': 'Admin only'}), 403
+    db = get_db()
+    total_convos = db.execute('SELECT COUNT(*) as c FROM sms_sessions').fetchone()['c']
+    total_msgs = db.execute('SELECT COUNT(*) as c FROM sms_conversations').fetchone()['c']
+    inbound = db.execute("SELECT COUNT(*) as c FROM sms_conversations WHERE direction='inbound'").fetchone()['c']
+    outbound = db.execute("SELECT COUNT(*) as c FROM sms_conversations WHERE direction='outbound'").fetchone()['c']
+    today = db.execute("""
+        SELECT COUNT(*) as c FROM sms_conversations
+        WHERE DATE(created_at) = DATE('now')
+    """).fetchone()['c']
+    return jsonify({
+        'total_conversations': total_convos,
+        'total_messages': total_msgs,
+        'inbound': inbound,
+        'outbound': outbound,
+        'messages_today': today,
+    })
+
 
 # ==================== LEGAL PAGES (Twilio A2P compliance) ====================
 

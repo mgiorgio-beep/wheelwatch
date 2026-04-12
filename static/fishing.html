@@ -978,6 +978,124 @@ body {
   </div>
 </div>
 
+<!-- ==================== PHONE REGISTRATION ==================== -->
+<div id="phone-section" style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;">
+  <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">SMS ACCESS</div>
+  <div id="phone-unregistered">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
+      Register your phone to use Wheelhouse by text. Ask the advisor, log catches,
+      and get Friend Group alerts from your messages app.
+    </p>
+    <input id="phone-input" type="tel" placeholder="(508) 555-0123" autocomplete="tel"
+           style="width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:14px;background:var(--bg-primary);color:var(--text-primary);box-sizing:border-box;">
+    <button onclick="sendVerificationCode()"
+            style="width:100%;margin-top:8px;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:1px;">
+      SEND VERIFICATION CODE
+    </button>
+  </div>
+  <div id="phone-verify-step" style="display:none;">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Enter the 6-digit code sent to your phone.</p>
+    <input id="verify-code-input" type="number" placeholder="123456" maxlength="6"
+           style="width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:20px;letter-spacing:6px;text-align:center;background:var(--bg-primary);color:var(--text-primary);box-sizing:border-box;">
+    <button onclick="submitVerificationCode()"
+            style="width:100%;margin-top:8px;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:1px;">
+      VERIFY
+    </button>
+    <button onclick="showPhoneInput()"
+            style="width:100%;margin-top:6px;background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;">
+      Use a different number
+    </button>
+  </div>
+  <div id="phone-verified" style="display:none;">
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg-primary);border-radius:6px;padding:12px;">
+      <div style="color:var(--accent);font-size:18px;">&#10003;</div>
+      <div>
+        <div style="font-size:13px;color:var(--text-primary);font-weight:700;">SMS Active</div>
+        <div id="phone-display" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+      </div>
+      <button onclick="removePhone()"
+              style="margin-left:auto;background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;">
+        Remove
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== FRIEND GROUPS ==================== -->
+<div id="groups-section" style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">
+    FRIEND GROUPS
+    <div id="notif-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:900;border-radius:10px;padding:1px 6px;">0</div>
+  </div>
+  <div style="display:flex;gap:4px;margin-bottom:12px;">
+    <button class="gtab" id="gtab-btn-feed" onclick="showGroupTab('feed',this)" style="flex:1;padding:8px;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:4px;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">FEED</button>
+    <button class="gtab" id="gtab-btn-groups" onclick="showGroupTab('groups',this)" style="flex:1;padding:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">MY GROUPS</button>
+    <button class="gtab" id="gtab-btn-create" onclick="showGroupTab('create',this)" style="flex:1;padding:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">+ NEW</button>
+  </div>
+  <div id="gtab-feed"><div id="groups-feed-list"><div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;font-style:italic;">Join or create a group to see shared catches.</div></div></div>
+  <div id="gtab-groups" style="display:none;">
+    <input id="join-code-input" placeholder="Enter invite code..." maxlength="12"
+           style="width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:14px;text-transform:uppercase;background:var(--bg-primary);color:var(--text-primary);box-sizing:border-box;">
+    <button onclick="joinGroup()" style="width:100%;margin-top:8px;padding:10px;background:var(--bg-primary);border:1px solid var(--border);color:var(--accent);border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:1px;">JOIN GROUP</button>
+    <div id="my-groups-list" style="margin-top:12px;"></div>
+  </div>
+  <div id="gtab-create" style="display:none;">
+    <input id="new-group-name" placeholder="Group name (e.g. Chatham Fleet)" maxlength="30"
+           style="width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:14px;background:var(--bg-primary);color:var(--text-primary);box-sizing:border-box;">
+    <button onclick="createGroup()" style="width:100%;margin-top:8px;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:1px;">CREATE GROUP</button>
+    <div id="new-group-result" style="display:none;margin-top:14px;text-align:center;background:var(--bg-primary);border:1px solid var(--accent);border-radius:6px;padding:16px;">
+      <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;">INVITE CODE</div>
+      <div id="invite-code-display" style="font-size:24px;font-weight:700;letter-spacing:6px;color:var(--accent);font-family:inherit;margin:8px 0 4px;">---</div>
+      <div style="font-size:11px;color:var(--text-muted);">Share this with your crew</div>
+      <button onclick="copyInviteCode()" style="width:100%;margin-top:10px;padding:8px;background:var(--bg-card);border:1px solid var(--border);color:var(--accent);border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;">COPY CODE</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP DETAIL MODAL -->
+<div id="group-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:flex-end;" onclick="closeGroupModal()">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px;width:100%;max-height:80vh;overflow-y:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="modal-group-name" style="font-size:16px;font-weight:700;color:var(--text-primary);letter-spacing:1px;">Group</span>
+      <button onclick="closeGroupModal()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;">&times;</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg-primary);border-radius:6px;padding:10px 12px;margin-bottom:14px;">
+      <span style="font-size:10px;color:var(--text-muted);letter-spacing:2px;">CODE</span>
+      <span id="modal-group-code" style="flex:1;font-size:16px;font-weight:700;letter-spacing:3px;color:var(--accent);font-family:inherit;">---</span>
+      <button onclick="copyModalCode()" style="font-size:10px;color:var(--accent);background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-weight:700;letter-spacing:1px;">COPY</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px;">
+      <span style="font-size:13px;color:var(--text-secondary);">Share my catches with this group</span>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;">
+        <input type="checkbox" id="modal-share-toggle" onchange="toggleSharing()" style="opacity:0;width:0;height:0;">
+        <span style="position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:0.2s;" id="share-slider"></span>
+      </label>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;margin-bottom:8px;">CREW</div>
+    <div id="modal-members-list"></div>
+    <button onclick="leaveGroup()" style="width:100%;margin-top:20px;padding:12px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;">Leave Group</button>
+  </div>
+</div>
+
+<!-- ==================== SMS ADMIN MONITOR ==================== -->
+<div id="sms-admin-section" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">
+    SMS MONITOR <span id="sms-stats-bar" style="font-size:11px;color:var(--text-muted);font-weight:400;letter-spacing:0;text-transform:none;"></span>
+  </div>
+  <div id="sms-convos-list"></div>
+</div>
+
+<!-- SMS CONVERSATION DETAIL MODAL -->
+<div id="sms-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-end;" onclick="closeSmsModal()">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px;width:100%;max-height:80vh;overflow-y:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="sms-modal-phone" style="font-size:16px;font-weight:700;color:var(--text-primary);">Conversation</span>
+      <button onclick="closeSmsModal()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;">&times;</button>
+    </div>
+    <div id="sms-modal-messages" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- LOG CATCH FAB -->
 <button class="catch-fab" id="catch-fab" onclick="catchToggle()">🐟 Log Catch</button>
 
@@ -2984,6 +3102,276 @@ window.addEventListener('resize', function() {
   if (canvas && window._lastTideData) drawTideChart(window._lastTideData);
   if (window._lastWindPoints) drawWindChart(window._lastWindPoints);
 });
+
+// ==================== PHONE REGISTRATION ====================
+
+async function initPhoneSection() {
+  try {
+    var res = await fetch('/api/user/profile');
+    var data = await res.json();
+    if (data.phone_verified) {
+      showPhoneVerified(data.phone_number);
+    } else if (data.phone_number) {
+      showVerifyStep();
+    } else {
+      showPhoneInput();
+    }
+  } catch(e) {}
+}
+function showPhoneInput() {
+  document.getElementById('phone-unregistered').style.display = 'block';
+  document.getElementById('phone-verify-step').style.display = 'none';
+  document.getElementById('phone-verified').style.display = 'none';
+}
+function showVerifyStep() {
+  document.getElementById('phone-unregistered').style.display = 'none';
+  document.getElementById('phone-verify-step').style.display = 'block';
+  document.getElementById('phone-verified').style.display = 'none';
+}
+function showPhoneVerified(phoneNumber) {
+  document.getElementById('phone-unregistered').style.display = 'none';
+  document.getElementById('phone-verify-step').style.display = 'none';
+  document.getElementById('phone-verified').style.display = 'block';
+  var masked = phoneNumber ? phoneNumber.slice(0,-4).replace(/\d/g, '\u2022') + phoneNumber.slice(-4) : '';
+  document.getElementById('phone-display').textContent = masked;
+}
+window.sendVerificationCode = async function() {
+  var phone = document.getElementById('phone-input').value.trim();
+  if (!phone) return;
+  try {
+    var res = await fetch('/api/user/phone/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({phone:phone})
+    });
+    var data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    showVerifyStep();
+  } catch(e) { alert('Could not send code.'); }
+};
+window.submitVerificationCode = async function() {
+  var code = document.getElementById('verify-code-input').value.trim();
+  if (!code || code.length !== 6) { alert('Enter the 6-digit code'); return; }
+  try {
+    var res = await fetch('/api/user/phone/verify', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code:code})
+    });
+    var data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    var profile = await (await fetch('/api/user/profile')).json();
+    showPhoneVerified(profile.phone_number);
+  } catch(e) { alert('Verification failed.'); }
+};
+window.removePhone = async function() {
+  if (!confirm('Remove your phone number?')) return;
+  await fetch('/api/user/phone/remove', {method:'POST'});
+  showPhoneInput();
+};
+
+// ==================== FRIEND GROUPS ====================
+
+var activeGroupTab = 'feed';
+var currentGroupId = null;
+var currentGroupCode = null;
+
+window.showGroupTab = function(tab, btn) {
+  activeGroupTab = tab;
+  ['feed','groups','create'].forEach(function(t) {
+    document.getElementById('gtab-'+t).style.display = t===tab?'block':'none';
+    var b = document.getElementById('gtab-btn-'+t);
+    if(b) { b.style.background = t===tab?'var(--accent)':'transparent'; b.style.color = t===tab?'#fff':'var(--text-muted)'; b.style.borderColor = t===tab?'var(--accent)':'var(--border)'; }
+  });
+  if (tab==='feed') loadGroupFeed();
+  if (tab==='groups') loadMyGroups();
+  if (tab==='create') { document.getElementById('new-group-result').style.display='none'; document.getElementById('new-group-name').value=''; }
+};
+
+async function loadGroupFeed() {
+  var el = document.getElementById('groups-feed-list');
+  try {
+    var res = await fetch('/api/groups');
+    var data = await res.json();
+    var groups = data.groups || [];
+    if (!groups.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;font-style:italic;">Join or create a group to see shared catches.</div>'; return; }
+    var allCatches = [];
+    for (var i=0; i<groups.length; i++) {
+      try {
+        var cr = await fetch('/api/groups/'+groups[i].id+'/catches');
+        var cd = await cr.json();
+        (cd.catches||[]).forEach(function(c) { c._group = groups[i].name; allCatches.push(c); });
+      } catch(e) {}
+    }
+    if (!allCatches.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;">No shared catches yet.</div>'; return; }
+    el.innerHTML = allCatches.slice(0,30).map(function(c) {
+      return '<div style="border-left:2px solid var(--accent);padding:8px 12px;margin-bottom:6px;background:var(--bg-primary);border-radius:0 4px 4px 0;">'+
+        '<div style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:1px;">'+c.captain+' <span style="color:var(--text-muted);font-weight:400;">&middot; '+c._group+'</span></div>'+
+        '<div style="font-size:13px;color:var(--text-primary);margin-top:2px;">'+(c.species||'--')+(c.technique?' &middot; '+c.technique:'')+(c.lure?' &middot; '+c.lure:'')+'</div>'+
+        (c.spot?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+c.spot+'</div>':'')+
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+c.date+'</div></div>';
+    }).join('');
+  } catch(e) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">Could not load feed.</div>'; }
+}
+
+async function loadMyGroups() {
+  var el = document.getElementById('my-groups-list');
+  try {
+    var res = await fetch('/api/groups');
+    var data = await res.json();
+    var groups = data.groups || [];
+    if (!groups.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;font-style:italic;">No groups yet.</div>'; return; }
+    el.innerHTML = groups.map(function(g) {
+      return '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;cursor:pointer;" onclick="openGroupModal('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\',\''+g.code+'\','+g.share_my_catches+')">'+
+        '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">'+g.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">'+(g.share_my_catches?'Sharing':'Not sharing')+' &middot; '+g.member_count+' member'+(g.member_count!==1?'s':'')+' &middot; '+(g.role==='captain'?'Captain':'Member')+'</div>'+
+        '<div style="display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;letter-spacing:2px;padding:2px 6px;border-radius:3px;margin-top:6px;">'+g.code+'</div></div>';
+    }).join('');
+  } catch(e) { el.innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load groups.</div>'; }
+}
+
+window.createGroup = async function() {
+  var name = document.getElementById('new-group-name').value.trim();
+  if (!name) return;
+  try {
+    var res = await fetch('/api/groups', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:name}) });
+    var data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    currentGroupCode = data.code;
+    document.getElementById('invite-code-display').textContent = data.code;
+    document.getElementById('new-group-result').style.display = 'block';
+    document.getElementById('new-group-name').value = '';
+  } catch(e) { alert('Could not create group.'); }
+};
+
+window.joinGroup = async function() {
+  var code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (!code) return;
+  try {
+    var res = await fetch('/api/groups/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code:code}) });
+    var data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('join-code-input').value = '';
+    alert('Joined "'+data.name+'"!');
+    showGroupTab('groups');
+  } catch(e) { alert('Could not join group.'); }
+};
+
+window.openGroupModal = function(id, name, code, sharing) {
+  currentGroupId = id; currentGroupCode = code;
+  document.getElementById('modal-group-name').textContent = name;
+  document.getElementById('modal-group-code').textContent = code;
+  document.getElementById('modal-share-toggle').checked = !!sharing;
+  loadModalMembers(id);
+  document.getElementById('group-modal').style.display = 'flex';
+};
+window.closeGroupModal = function() { document.getElementById('group-modal').style.display='none'; currentGroupId=null; };
+
+async function loadModalMembers(groupId) {
+  var el = document.getElementById('modal-members-list');
+  try {
+    var res = await fetch('/api/groups/'+groupId+'/members');
+    var data = await res.json();
+    el.innerHTML = (data.members||[]).map(function(m) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-light);">'+
+        '<span style="font-size:13px;color:var(--text-primary);">'+m.username+'</span>'+
+        '<span style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">'+(m.role==='captain'?'CAPTAIN':'MEMBER')+'</span></div>';
+    }).join('');
+  } catch(e) {}
+}
+
+window.toggleSharing = async function() {
+  if (!currentGroupId) return;
+  var share = document.getElementById('modal-share-toggle').checked;
+  await fetch('/api/groups/'+currentGroupId+'/sharing', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({share:share}) });
+  loadMyGroups();
+};
+
+window.leaveGroup = async function() {
+  if (!currentGroupId || !confirm('Leave this group?')) return;
+  try {
+    var res = await fetch('/api/groups/'+currentGroupId+'/leave', {method:'POST'});
+    var data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    closeGroupModal(); loadMyGroups();
+  } catch(e) { alert('Could not leave group.'); }
+};
+
+window.copyInviteCode = function() {
+  var code = document.getElementById('invite-code-display').textContent;
+  navigator.clipboard.writeText(code).then(function() { alert('Copied: '+code); });
+};
+window.copyModalCode = function() {
+  if (!currentGroupCode) return;
+  navigator.clipboard.writeText(currentGroupCode).then(function() { alert('Copied: '+currentGroupCode); });
+};
+
+// Notification polling
+async function pollNotifications() {
+  try {
+    var res = await fetch('/api/notifications');
+    var data = await res.json();
+    var notifs = data.notifications || [];
+    var badge = document.getElementById('notif-badge');
+    if (notifs.length > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = notifs.length;
+      await fetch('/api/notifications/read', {method:'POST'});
+      if (activeGroupTab === 'feed') loadGroupFeed();
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+// ==================== SMS ADMIN MONITOR ====================
+
+async function initSmsAdmin() {
+  try {
+    var res = await fetch('/api/sms/stats');
+    if (res.status === 403) return;
+    var data = await res.json();
+    document.getElementById('sms-admin-section').style.display = 'block';
+    document.getElementById('sms-stats-bar').textContent = data.total_conversations+' captains \u00b7 '+data.messages_today+' msgs today';
+    loadSmsConversations();
+  } catch(e) {}
+}
+
+async function loadSmsConversations() {
+  var el = document.getElementById('sms-convos-list');
+  try {
+    var res = await fetch('/api/sms/conversations');
+    var data = await res.json();
+    var convos = data.conversations || [];
+    if (!convos.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">No SMS conversations yet.</div>'; return; }
+    el.innerHTML = convos.map(function(c) {
+      return '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:6px;cursor:pointer;" onclick="openSmsConvo(\''+c.phone_full+'\',\''+c.phone+'\')">'+
+        '<div style="display:flex;justify-content:space-between;"><span style="font-size:13px;font-weight:700;color:var(--text-primary);">'+c.phone+'</span><span style="font-size:11px;color:var(--text-muted);">'+c.message_count+' msgs</span></div>'+
+        (c.last_message?'<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">'+(c.last_message.direction==='inbound'?'\u2192':'\u2190')+' '+c.last_message.body.substring(0,60)+'</div>':'')+'</div>';
+    }).join('');
+  } catch(e) { el.innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load conversations.</div>'; }
+}
+
+window.openSmsConvo = async function(phoneFull, phoneDisplay) {
+  document.getElementById('sms-modal-phone').textContent = phoneDisplay;
+  document.getElementById('sms-modal-messages').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">Loading...</div>';
+  document.getElementById('sms-modal').style.display = 'flex';
+  try {
+    var res = await fetch('/api/sms/conversation/'+encodeURIComponent(phoneFull));
+    var data = await res.json();
+    document.getElementById('sms-modal-messages').innerHTML = (data.messages||[]).map(function(m) {
+      return '<div style="margin-bottom:10px;'+(m.direction==='inbound'?'':'padding-left:20px;opacity:0.8;')+'">'+
+        '<div style="font-size:10px;color:'+(m.direction==='inbound'?'var(--accent)':'var(--green)')+';letter-spacing:1px;margin-bottom:2px;">'+(m.direction==='inbound'?'CAPTAIN':'WHEELHOUSE')+'</div>'+
+        '<div style="font-size:13px;color:var(--text-primary);line-height:1.5;">'+m.body+'</div>'+
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+m.created_at+'</div></div>';
+    }).join('');
+  } catch(e) { document.getElementById('sms-modal-messages').innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load messages.</div>'; }
+};
+window.closeSmsModal = function() { document.getElementById('sms-modal').style.display='none'; };
+
+// Init all new features
+initPhoneSection();
+pollNotifications();
+setInterval(pollNotifications, 30000);
+initSmsAdmin();
 
 })();
 </script>

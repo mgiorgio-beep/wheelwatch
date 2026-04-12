@@ -614,6 +614,37 @@ Rules:
 
         logger.info(f'Catch logged: {data.get("spot")} — {filename}')
 
+        # Notify Friend Group members
+        try:
+            import sqlite3 as sqlite3_mod
+            with sqlite3_mod.connect(os.path.join(os.path.dirname(__file__), 'wheelhouse.db')) as ndb:
+                ndb.row_factory = sqlite3_mod.Row
+                username = flask_session.get('username', '')
+                groups = ndb.execute('''
+                    SELECT g.id, g.name FROM friend_groups g
+                    JOIN group_members gm ON g.id = gm.group_id
+                    WHERE gm.username = ? AND gm.share_my_catches = 1
+                ''', (username,)).fetchall()
+                for group in groups:
+                    members = ndb.execute('''
+                        SELECT username FROM group_members
+                        WHERE group_id = ? AND username != ? AND share_my_catches = 1
+                    ''', (group['id'], username)).fetchall()
+                    for member in members:
+                        species = entry.get('species', 'a fish')
+                        spot = entry.get('spot', '')
+                        msg = f"{username} just logged {species}"
+                        if spot: msg += f" at {spot}"
+                        ndb.execute('''
+                            INSERT INTO group_notifications
+                            (group_id, group_name, from_user, to_user, spot, species, message)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (group['id'], group['name'], username, member['username'],
+                              entry.get('spot',''), entry.get('species',''), msg))
+                ndb.commit()
+        except Exception as e:
+            logger.error(f'Group notification failed: {e}')
+
         # Email notification
         try:
             gmail_user = os.environ.get('GMAIL_ADDRESS', '')
@@ -652,12 +683,16 @@ Rules:
     @app.route('/api/fishing/logs')
     @login_required
     def api_catch_logs():
+        from flask import session as flask_session
+        current_user = flask_session.get('username', '')
         files = sorted(globmod.glob(os.path.join(LOGS_DIR, 'catch_*.json')), reverse=True)
         logs = []
-        for fp in files[:50]:
+        for fp in files[:500]:
             try:
                 with open(fp, 'r') as f:
                     entry = json.load(f)
+                if entry.get('logged_by', '') != current_user:
+                    continue
                 dt = datetime.fromisoformat(entry['timestamp'])
                 logs.append({
                     'filename': os.path.basename(fp),
@@ -678,12 +713,16 @@ Rules:
     @app.route('/api/fishing/log/<filename>', methods=['DELETE'])
     @login_required
     def api_catch_delete(filename):
-        # Only allow deleting catch_*.json files
+        from flask import session as flask_session
         if not filename.startswith('catch_') or not filename.endswith('.json'):
             return jsonify({'error': 'Invalid filename'}), 400
         filepath = os.path.join(LOGS_DIR, filename)
         if not os.path.exists(filepath):
             return jsonify({'error': 'Not found'}), 404
+        with open(filepath) as f:
+            entry = json.load(f)
+        if entry.get('logged_by') != flask_session.get('username'):
+            return jsonify({'error': 'Not authorized'}), 403
         os.remove(filepath)
         logger.info(f'Catch log deleted: {filename}')
         return jsonify({'deleted': True})
