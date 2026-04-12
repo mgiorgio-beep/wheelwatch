@@ -573,7 +573,7 @@ def api_group_sharing_toggle(group_id):
 @app.route('/api/groups/<int:group_id>/catches', methods=['GET'])
 @login_required
 def api_group_catches(group_id):
-    """Shared catches from group members who have opted in. GPS always omitted."""
+    """Shared catches from group members who have opted in. GPS included for crew."""
     db = get_db()
     if not db.execute('SELECT id FROM group_members WHERE group_id = ? AND username = ?',
                       (group_id, session['username'])).fetchone():
@@ -600,6 +600,8 @@ def api_group_catches(group_id):
                 'technique': entry.get('technique', ''),
                 'lure': entry.get('lure', ''),
                 'notes': entry.get('notes', ''),
+                'gps': entry.get('gps'),
+                'conditions': entry.get('conditions', {}),
             })
         except Exception:
             pass
@@ -982,15 +984,24 @@ def render_legal_page(page_type):
 
         <h3>Catch Log Data</h3>
         <p>Your catch logs including spot names and GPS coordinates are private to your
-        account by default. If you join a Friend Group and enable catch sharing, spot
-        names (not GPS coordinates) are visible to group members. GPS coordinates are
-        never shared with other users under any circumstance.</p>
+        account by default.</p>
+
+        <p>When you join a Friend Group and enable catch sharing, the following
+        information becomes visible to other members of that group: spot name,
+        species, technique, lure, notes, GPS coordinates, and conditions data.
+        GPS is shared within your crew because you have explicitly opted in to
+        share with those specific captains. You control this per crew at any
+        time from the crew settings.</p>
+
+        <p>GPS coordinates shared within a Friend Group are never used in
+        aggregate analysis and are never visible to anyone outside that specific
+        group — including other crews you belong to.</p>
 
         <h3>Aggregate Analysis</h3>
-        <p>Anonymized catch data — species, technique, and spot names with all
-        identifying information removed — may be used in aggregate to improve fishing
-        pattern predictions for all users. No individual catch data is attributable
-        to you in this analysis.</p>
+        <p>Anonymized catch data — species and technique only — may be used in
+        aggregate to improve fishing pattern predictions for all users. No GPS
+        coordinates, spot names, lure selections, notes, or usernames are included
+        in aggregate analysis. No individual catch data is attributable to you.</p>
 
         <h3>Data Storage</h3>
         <p>Your data is stored on a private server located in Chatham, Massachusetts.

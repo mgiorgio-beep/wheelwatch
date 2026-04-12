@@ -3203,10 +3203,14 @@ async function loadGroupFeed() {
     }
     if (!allCatches.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;">No shared catches yet.</div>'; return; }
     el.innerHTML = allCatches.slice(0,30).map(function(c) {
+      var gpsHtml = c.gps && c.gps.lat
+        ? '<a href="https://maps.apple.com/?ll='+c.gps.lat+','+c.gps.lon+'&q=Catch+Location" style="display:inline-block;margin-top:5px;color:#0A84FF;font-size:12px;text-decoration:none;">View on map</a>'
+        : '';
       return '<div style="border-left:2px solid var(--accent);padding:8px 12px;margin-bottom:6px;background:var(--bg-primary);border-radius:0 4px 4px 0;">'+
         '<div style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:1px;">'+c.captain+' <span style="color:var(--text-muted);font-weight:400;">&middot; '+c._group+'</span></div>'+
         '<div style="font-size:13px;color:var(--text-primary);margin-top:2px;">'+(c.species||'--')+(c.technique?' &middot; '+c.technique:'')+(c.lure?' &middot; '+c.lure:'')+'</div>'+
         (c.spot?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+c.spot+'</div>':'')+
+        gpsHtml+
         '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+c.date+'</div></div>';
     }).join('');
   } catch(e) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">Could not load feed.</div>'; }
