@@ -136,12 +136,49 @@ Use compass headings, wave heights, periods, and directions. Be specific about w
 
 Messages may include [Current GPS: lat, lon] — this is his live position from his phone. Use it to give location-aware advice: how far he is from suggested spots, whether he should keep fishing where he is or move, and what the conditions are at his current position relative to tide/current timing.
 
+## BIRD ACTIVITY
+When bird activity indicators are present in the live data (high chlorophyll, strong SST breaks), mention it naturally in your advice. Birds working on bait are one of the most reliable signals for finding fish. If chlorophyll is high in an area, note that bait is likely concentrated there and birds may be showing. If the SST corridor gradient shows a strong break, bait stacks on the warm side of that edge — birds will be on it.
+
 ## IMPORTANT
 - Shoals SHIFT every year. Published chart depths are unreliable. Always trust the sounder.
 - The 3-mile limit applies to stripers — some shoals outside it are not legal for targeting stripers.
 - Grey seals are everywhere and have hurt the surf fishing, but boat fishing is better than ever.
 - Fog is extremely common at Monomoy due to the temperature differential. Always note fog risk.
 """
+
+
+def _detect_bird_activity(erddap_data):
+    """
+    Detect likely bird activity based on chlorophyll concentration and SST breaks.
+    High chlorophyll = plankton bloom = bait concentration = birds working.
+    Strong SST gradient = current edge = bait stacking = birds.
+    Returns a short alert string or None.
+    """
+    if not erddap_data:
+        return None
+
+    signals = []
+
+    # Check chlorophyll levels
+    chl = erddap_data.get('chlorophyll', {})
+    for key, pt in chl.items():
+        if pt.get('chlor_a', 0) > 2.0:
+            signals.append(f"High chlorophyll at {pt['name']} ({pt['chlor_a']} mg/m3) — "
+                          f"bait likely concentrated, watch for birds.")
+
+    # Check corridor gradient
+    corridor = erddap_data.get('corridor_gradient')
+    if corridor and corridor.get('status') == 'strong_break':
+        signals.append(f"Strong temp break in corridor ({corridor['summary']}) — "
+                      f"bait stacks on the warm edge, birds should be showing.")
+
+    # Check main gradient
+    gradient = erddap_data.get('temp_gradient')
+    if gradient and abs(gradient.get('difference_f', 0)) >= 3:
+        signals.append(f"Sharp SST gradient ({gradient['summary']}) — "
+                      f"expect bird activity along the temp break.")
+
+    return signals if signals else None
 
 
 def get_live_data_context():
@@ -220,18 +257,34 @@ def get_live_data_context():
         sst = erddap.get('sst', {})
         chl = erddap.get('chlorophyll', {})
         gradient = erddap.get('temp_gradient')
+        corridor_grad = erddap.get('corridor_gradient')
         if sst:
             ctx.append("SEA SURFACE TEMPERATURE (MUR Satellite, 1km):")
             for key, pt in sst.items():
                 ctx.append(f"  {pt['name']}: {pt['temp_f']}F ({pt['temp_c']}C)")
             if gradient:
                 ctx.append(f"  >> TEMP GRADIENT: {gradient['summary']}")
+            if corridor_grad:
+                ctx.append(f"  >> CORRIDOR GRADIENT: {corridor_grad['summary']}")
+                if corridor_grad['status'] == 'strong_break':
+                    ctx.append("  >> Strong temp break in the corridor — bait likely "
+                               "stacking on the warm side. Watch for bird activity.")
+                elif corridor_grad['status'] == 'moderate_break':
+                    ctx.append("  >> Moderate temp transition through the corridor.")
             ctx.append("")
         if chl:
             ctx.append("CHLOROPHYLL-a / BAIT CONCENTRATION (MODIS):")
             for key, pt in chl.items():
                 level = 'LOW' if pt['chlor_a'] < 0.5 else ('HIGH' if pt['chlor_a'] > 2.0 else 'MODERATE')
                 ctx.append(f"  {pt['name']}: {pt['chlor_a']} mg/m3 ({level}) [{pt['source']}]")
+            ctx.append("")
+
+        # Bird activity detection
+        bird_signals = _detect_bird_activity(erddap)
+        if bird_signals:
+            ctx.append("BIRD ACTIVITY INDICATORS:")
+            for sig in bird_signals:
+                ctx.append(f"  {sig}")
             ctx.append("")
 
     # AIS vessel activity

@@ -596,11 +596,13 @@ def get_continuous_wind(station='44020'):
 ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap'
 
 MONOMOY_POINTS = {
-    'sound_side':    {'lat': 41.66, 'lon': -70.03, 'name': 'Stage Harbor / Sound Side'},
-    'monomoy_tip':   {'lat': 41.53, 'lon': -69.99, 'name': 'Monomoy Tip'},
-    'stonehorse':    {'lat': 41.52, 'lon': -70.00, 'name': 'Stonehorse Shoal'},
-    'east_atlantic': {'lat': 41.55, 'lon': -69.88, 'name': 'East Atlantic Side'},
-    'offshore':      {'lat': 41.38, 'lon': -69.75, 'name': 'Offshore (SE)'},
+    'sound_side':      {'lat': 41.66, 'lon': -70.03, 'name': 'Stage Harbor / Sound Side'},
+    'corridor_mouth':  {'lat': 41.60, 'lon': -69.99, 'name': 'Monomoy Corridor (cuts)'},
+    'corridor_mid':    {'lat': 41.54, 'lon': -69.99, 'name': 'Monomoy Corridor (mid)'},
+    'monomoy_tip':     {'lat': 41.53, 'lon': -69.99, 'name': 'Monomoy Tip'},
+    'stonehorse':      {'lat': 41.52, 'lon': -70.00, 'name': 'Stonehorse Shoal'},
+    'east_atlantic':   {'lat': 41.55, 'lon': -69.88, 'name': 'East Atlantic Side'},
+    'offshore':        {'lat': 41.38, 'lon': -69.75, 'name': 'Offshore (SE)'},
 }
 
 def _kelvin_to_f(k):
@@ -673,10 +675,33 @@ def get_erddap_conditions():
                 )
             }
 
+        # Corridor gradient — is water in the corridor warmer or cooler than the rips?
+        corridor_gradient = None
+        if 'corridor_mouth' in sst_data and 'stonehorse' in sst_data:
+            c_diff = sst_data['corridor_mouth']['temp_f'] - sst_data['stonehorse']['temp_f']
+            if abs(c_diff) >= 2:
+                c_status = 'strong_break'
+            elif abs(c_diff) >= 1:
+                c_status = 'moderate_break'
+            else:
+                c_status = 'uniform'
+            corridor_gradient = {
+                'corridor_f': sst_data['corridor_mouth']['temp_f'],
+                'stonehorse_f': sst_data['stonehorse']['temp_f'],
+                'difference_f': round(c_diff, 1),
+                'status': c_status,
+                'summary': (
+                    f"Corridor {sst_data['corridor_mouth']['temp_f']}F vs "
+                    f"Stonehorse {sst_data['stonehorse']['temp_f']}F "
+                    f"({'+' if c_diff > 0 else ''}{c_diff:.1f}F)"
+                )
+            }
+
         return {
             'sst': sst_data,
             'chlorophyll': chla_data,
             'temp_gradient': gradient,
+            'corridor_gradient': corridor_gradient,
             'fetched': datetime.now().isoformat(),
         }
 

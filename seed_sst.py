@@ -18,6 +18,9 @@ logger = logging.getLogger('sst-seed')
 
 SOUND_LAT, SOUND_LON = 41.66, -70.03
 ATLANTIC_LAT, ATLANTIC_LON = 41.55, -69.88
+CORRIDOR_MOUTH_LAT, CORRIDOR_MOUTH_LON = 41.60, -69.99
+CORRIDOR_MID_LAT, CORRIDOR_MID_LON = 41.54, -69.99
+STONEHORSE_LAT, STONEHORSE_LON = 41.52, -70.00
 
 
 def to_fahrenheit(val):
@@ -94,6 +97,10 @@ def seed_historical_sst(days_back=365*3):
             time.sleep(1)
             atlantic_data = fetch_sst_timeseries(s, e, ATLANTIC_LAT, ATLANTIC_LON)
             time.sleep(1)
+            corridor_data = fetch_sst_timeseries(s, e, CORRIDOR_MOUTH_LAT, CORRIDOR_MOUTH_LON)
+            time.sleep(1)
+            stonehorse_data = fetch_sst_timeseries(s, e, STONEHORSE_LAT, STONEHORSE_LON)
+            time.sleep(1)
 
             seeded = 0
             for date_str in sound_data:
@@ -106,11 +113,20 @@ def seed_historical_sst(days_back=365*3):
                 atlantic_f = to_fahrenheit(atlantic_data[date_str])
                 gradient = round(sound_f - atlantic_f, 1)
 
+                # Corridor gradient (optional — may not have data for all dates)
+                corridor_gradient = None
+                if date_str in corridor_data and date_str in stonehorse_data:
+                    corridor_f = to_fahrenheit(corridor_data[date_str])
+                    stonehorse_f = to_fahrenheit(stonehorse_data[date_str])
+                    corridor_gradient = round(corridor_f - stonehorse_f, 1)
+
                 db.execute('''
                     INSERT OR IGNORE INTO conditions_log
-                    (date, snapshot_hour, sst_sound_side, sst_east_atlantic, sst_gradient_f, logged_at)
-                    VALUES (?, 12, ?, ?, ?, ?)
-                ''', (date_str, sound_f, atlantic_f, gradient, datetime.now().isoformat()))
+                    (date, snapshot_hour, sst_sound_side, sst_east_atlantic, sst_gradient_f,
+                     sst_corridor_gradient_f, logged_at)
+                    VALUES (?, 12, ?, ?, ?, ?, ?)
+                ''', (date_str, sound_f, atlantic_f, gradient, corridor_gradient,
+                      datetime.now().isoformat()))
                 seeded += 1
 
             db.commit()
