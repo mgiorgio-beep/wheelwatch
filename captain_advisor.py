@@ -234,6 +234,14 @@ def get_live_data_context():
                 ctx.append(f"  {pt['name']}: {pt['chlor_a']} mg/m3 ({level}) [{pt['source']}]")
             ctx.append("")
 
+    # AIS vessel activity
+    ais = briefing.get('ais')
+    if ais and ais.get('fishing_vessels'):
+        ctx.append(f"AIS VESSEL ACTIVITY (Cape Cod area):")
+        ctx.append(f"  {ais['fishing_count']} fishing/pleasure vessels in area")
+        ctx.append(f"  Total vessels: {ais['total']}")
+        ctx.append("")
+
     return "\n".join(ctx)
 
 

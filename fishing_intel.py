@@ -680,6 +680,76 @@ def get_erddap_conditions():
     return _cached('erddap_conditions', 'tides', fetch)
 
 
+# ==================== AIS VESSEL TRACKING ====================
+
+AIS_BBOX = {
+    'latmin': 41.3, 'latmax': 42.1,
+    'lonmin': -70.5, 'lonmax': -69.5,
+}
+
+def get_ais_vessels():
+    """
+    Fetch vessel positions in the Cape Cod / Monomoy area.
+    Uses AISHub free tier — register at aishub.net for credentials.
+    Requires AISHUB_USERNAME in .env
+    """
+    import os
+    def fetch():
+        username = os.environ.get('AISHUB_USERNAME', '')
+        if not username:
+            logger.warning('AISHUB_USERNAME not set — AIS unavailable')
+            return None
+
+        params = {
+            'username': username,
+            'format': '1',
+            'output': 'json',
+            'compress': '0',
+            'latmin': AIS_BBOX['latmin'],
+            'latmax': AIS_BBOX['latmax'],
+            'lonmin': AIS_BBOX['lonmin'],
+            'lonmax': AIS_BBOX['lonmax'],
+        }
+
+        r = requests.get('https://data.aishub.net/ws.php',
+                         params=params, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+
+        if not data or len(data) < 2:
+            return {'vessels': [], 'fetched': datetime.now().isoformat()}
+
+        vessels = []
+        for v in data[1]:
+            try:
+                vessels.append({
+                    'mmsi': v.get('MMSI'),
+                    'name': v.get('NAME', 'Unknown').strip(),
+                    'lat': v.get('LATITUDE'),
+                    'lon': v.get('LONGITUDE'),
+                    'speed': v.get('SPEED'),
+                    'course': v.get('COG'),
+                    'type': v.get('TYPE'),
+                    'length': v.get('A', 0) + v.get('B', 0),
+                    'updated': v.get('TIME'),
+                })
+            except Exception:
+                pass
+
+        fishing_vessels = [v for v in vessels if v.get('type') in (30, 36, 37, None)]
+
+        return {
+            'vessels': vessels,
+            'fishing_vessels': fishing_vessels,
+            'total': len(vessels),
+            'fishing_count': len(fishing_vessels),
+            'bbox': AIS_BBOX,
+            'fetched': datetime.now().isoformat(),
+        }
+
+    return _cached('ais_vessels', 'buoy', fetch)
+
+
 # ==================== CAPTAIN'S BRIEFING ====================
 
 def get_briefing():
@@ -717,6 +787,9 @@ def get_briefing():
 
     # ERDDAP satellite SST & chlorophyll
     briefing['erddap'] = get_erddap_conditions()
+
+    # AIS vessel tracking
+    briefing['ais'] = get_ais_vessels()
 
     return briefing
 
@@ -832,6 +905,12 @@ def register_routes(app, login_required):
     def api_fishing_erddap():
         data = get_erddap_conditions()
         return jsonify(data) if data else (jsonify({'error': 'unavailable'}), 503)
+
+    @app.route('/api/fishing/ais')
+    @login_required
+    def api_fishing_ais():
+        data = get_ais_vessels()
+        return jsonify(data) if data else (jsonify({'error': 'AIS unavailable — set AISHUB_USERNAME in .env'}), 503)
 
     # Serve the fishing page
     @app.route('/fishing')
