@@ -250,23 +250,21 @@ def get_live_data_context():
         patterns = get_pattern_prediction(trip_hour=current_hour)
 
         if patterns.get('status') == 'ok':
-            ctx.append("HISTORICAL PATTERN ANALYSIS (tide-relative matching):")
+            ctx.append("HISTORICAL PATTERN ANALYSIS:")
             ctx.append(f"  {patterns['summary']}")
-            if patterns.get('tide_direction') and patterns.get('tide_hours_to_high') is not None:
-                hrs = abs(patterns['tide_hours_to_high'])
-                direction = patterns['tide_direction']
-                to_from = 'to' if patterns['tide_hours_to_high'] > 0 else 'past'
-                ctx.append(f"  Matched on: {direction} tide, {hrs:.1f}hrs {to_from} high, "
-                           f"{patterns.get('tide_strength','')} conditions")
-            ctx.append(f"  Based on {patterns['days_logged']} days of logged conditions.")
-            ctx.append("")
-        elif patterns.get('status') == 'seeding':
-            ctx.append(f"PATTERN ENGINE: {patterns['message']}")
+            if patterns.get('sst_trend') == 'strengthening':
+                ctx.append("  SST gradient strengthening — temp break sharpening, "
+                           "bait likely concentrating on the edge.")
+            elif patterns.get('sst_trend') == 'weakening':
+                ctx.append("  SST gradient weakening — temp break diffusing.")
             if patterns.get('seasonal_note'):
                 ctx.append(f"  {patterns['seasonal_note']}")
             ctx.append("")
+        elif patterns.get('status') == 'seeding':
+            ctx.append(f"PATTERN ENGINE: {patterns.get('message', '')}")
+            ctx.append("")
     except Exception as e:
-        logger.warning(f'Pattern intel v2 failed: {e}')
+        logger.warning(f'Pattern intel failed: {e}')
 
     return "\n".join(ctx)
 

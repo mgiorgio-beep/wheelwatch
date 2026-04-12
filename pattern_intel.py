@@ -297,53 +297,49 @@ def get_pattern_prediction(trip_hour=None):
     top_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:3]
     top_techniques = sorted(technique_counts.items(), key=lambda x: x[1], reverse=True)[:3]
 
-    # Build summary
+    # Build summary — natural language, no raw counts
     lines = []
     tide_dir = target_conditions.get('tide_direction', '')
     hrs_to_high = target_conditions.get('tide_hours_to_next_high')
     tide_strength = target_conditions.get('tide_strength', '')
+    sst_trend = target_conditions.get('sst_trend', '')
 
-    if tide_dir and hrs_to_high:
+    if top_techniques and top_species:
+        top_te = top_techniques[0][0]
         lines.append(
-            f"TIDE-RELATIVE PATTERN: {len(analogous_catches)} catches logged "
-            f"under similar conditions ({tide_dir}, "
-            f"{abs(hrs_to_high):.1f}hrs {'to' if hrs_to_high > 0 else 'from'} high, "
-            f"{tide_strength} tide)."
+            f"Conditions today are consistent with setups that have historically "
+            f"produced at Monomoy. {top_te.capitalize()} has been the stronger "
+            f"technique under similar tide and temperature conditions."
+        )
+    elif top_techniques:
+        top_te = top_techniques[0][0]
+        lines.append(
+            f"Conditions today match historical setups that have been productive "
+            f"at Monomoy. {top_te.capitalize()} has been effective under similar "
+            f"conditions."
+        )
+    elif analogous_catches:
+        lines.append(
+            "Conditions today are consistent with historically productive setups "
+            "at Monomoy. Keep logging catches to sharpen the recommendations."
         )
     else:
-        lines.append(f"PATTERN: {len(analogous_catches)} analogous catches found.")
+        lines.append(
+            "Not enough catch data yet to identify patterns — keep logging."
+        )
 
-    if top_species:
-        lines.append("Species logged under similar conditions: " +
-                     ', '.join([f"{s} ({n}x)" for s, n in top_species]))
-    if top_techniques:
-        lines.append("Productive techniques: " +
-                     ', '.join([f"{t} ({n}x)" for t, n in top_techniques]))
-
-    lines.append(_seasonal_note(current_month, seasonal_index))
-
-    if not top_species:
-        lines.append("Not enough catch logs yet for pattern matching — keep logging.")
-
-    sst_trend = target_conditions.get('sst_trend', '')
-    if sst_trend == 'strengthening':
-        lines.append("SST gradient strengthening — temp break sharpening, "
-                     "bait likely concentrating on the edge.")
-    elif sst_trend == 'weakening':
-        lines.append("SST gradient weakening — temp break diffusing, "
-                     "bait may be dispersing.")
+    seasonal_note = _seasonal_note(current_month, seasonal_index)
 
     return {
         'status': 'ok',
         'days_logged': total_logged // 3,
         'analogous_catches': len(analogous_catches),
-        'top_species': top_species,
-        'top_techniques': top_techniques,
-        'seasonal_index': seasonal_index,
         'tide_direction': tide_dir,
         'tide_hours_to_high': hrs_to_high,
         'tide_strength': tide_strength,
         'sst_trend': sst_trend,
+        'seasonal_index': seasonal_index,
+        'seasonal_note': seasonal_note,
         'summary': ' '.join(lines),
         'generated': datetime.now().isoformat(),
     }
