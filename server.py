@@ -627,6 +627,46 @@ def api_group_leave(group_id):
     return jsonify({'left': True})
 
 
+@app.route('/api/groups/<int:group_id>/transfer', methods=['POST'])
+@login_required
+def api_group_transfer_captain(group_id):
+    """Transfer captain role to another member."""
+    db = get_db()
+
+    # Verify requester is the captain
+    member = db.execute(
+        'SELECT * FROM group_members WHERE group_id = ? AND username = ?',
+        (group_id, session['username'])).fetchone()
+    if not member:
+        return jsonify({'error': 'Not a member'}), 403
+    if member['role'] != 'captain':
+        return jsonify({'error': 'Only the captain can transfer ownership'}), 403
+
+    data = request.get_json()
+    new_captain = data.get('username', '').strip() if data else ''
+    if not new_captain:
+        return jsonify({'error': 'Username required'}), 400
+
+    # Verify new captain is a member
+    target = db.execute(
+        'SELECT * FROM group_members WHERE group_id = ? AND username = ?',
+        (group_id, new_captain)).fetchone()
+    if not target:
+        return jsonify({'error': f'{new_captain} is not in this crew'}), 404
+
+    # Transfer
+    db.execute(
+        'UPDATE group_members SET role = ? WHERE group_id = ? AND username = ?',
+        ('member', group_id, session['username']))
+    db.execute(
+        'UPDATE group_members SET role = ? WHERE group_id = ? AND username = ?',
+        ('captain', group_id, new_captain))
+    db.commit()
+
+    logger.info(f'Captain transfer: {session["username"]} -> {new_captain} in group {group_id}')
+    return jsonify({'ok': True, 'new_captain': new_captain})
+
+
 # ==================== NOTIFICATIONS ====================
 
 @app.route('/api/notifications', methods=['GET'])

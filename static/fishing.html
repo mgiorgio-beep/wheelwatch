@@ -1073,7 +1073,8 @@ body {
     </div>
     <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;margin-bottom:8px;">CREW</div>
     <div id="modal-members-list"></div>
-    <button onclick="leaveGroup()" style="width:100%;margin-top:20px;padding:12px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;">Leave Group</button>
+    <button id="transfer-captain-btn" onclick="transferCaptain()" style="width:100%;margin-top:12px;padding:12px;background:transparent;border:1px solid #3A3A3C;color:#8E8E93;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:1px;cursor:pointer;display:none;">Transfer Captain Role</button>
+    <button onclick="leaveGroup()" style="width:100%;margin-top:12px;padding:12px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;">Leave Group</button>
   </div>
 </div>
 
@@ -3173,6 +3174,16 @@ window.removePhone = async function() {
 var activeGroupTab = 'feed';
 var currentGroupId = null;
 var currentGroupCode = null;
+var currentUsername = null;
+
+// Load current username
+(async function() {
+  try {
+    var res = await fetch('/api/user/profile');
+    var data = await res.json();
+    currentUsername = data.username;
+  } catch(e) {}
+})();
 
 window.showGroupTab = function(tab, btn) {
   activeGroupTab = tab;
@@ -3224,7 +3235,7 @@ async function loadMyGroups() {
     var groups = data.groups || [];
     if (!groups.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;font-style:italic;">No groups yet.</div>'; return; }
     el.innerHTML = groups.map(function(g) {
-      return '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;cursor:pointer;" onclick="openGroupModal('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\',\''+g.code+'\','+g.share_my_catches+')">'+
+      return '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;cursor:pointer;" onclick="openGroupModal('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\',\''+g.code+'\','+g.share_my_catches+',\''+g.role+'\')">'+
         '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">'+g.name+'</div>'+
         '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">'+(g.share_my_catches?'Sharing':'Not sharing')+' &middot; '+g.member_count+' member'+(g.member_count!==1?'s':'')+' &middot; '+(g.role==='captain'?'Captain':'Member')+'</div>'+
         '<div style="display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;letter-spacing:2px;padding:2px 6px;border-radius:3px;margin-top:6px;">'+g.code+'</div></div>';
@@ -3259,12 +3270,16 @@ window.joinGroup = async function() {
   } catch(e) { alert('Could not join group.'); }
 };
 
-window.openGroupModal = function(id, name, code, sharing) {
+window.openGroupModal = function(id, name, code, sharing, role) {
   currentGroupId = id; currentGroupCode = code;
   document.getElementById('modal-group-name').textContent = name;
   document.getElementById('modal-group-code').textContent = code;
   document.getElementById('modal-share-toggle').checked = !!sharing;
   loadModalMembers(id);
+  var transferBtn = document.getElementById('transfer-captain-btn');
+  if (transferBtn) {
+    transferBtn.style.display = role === 'captain' ? 'block' : 'none';
+  }
   document.getElementById('group-modal').style.display = 'flex';
 };
 window.closeGroupModal = function() { document.getElementById('group-modal').style.display='none'; currentGroupId=null; };
@@ -3297,6 +3312,29 @@ window.leaveGroup = async function() {
     if (data.error) { alert(data.error); return; }
     closeGroupModal(); loadMyGroups();
   } catch(e) { alert('Could not leave group.'); }
+};
+
+window.transferCaptain = async function() {
+  if (!currentGroupId) return;
+  try {
+    var res = await fetch('/api/groups/'+currentGroupId+'/members');
+    var data = await res.json();
+    var others = (data.members || []).filter(function(m) {
+      return m.role !== 'captain' && m.username !== currentUsername;
+    });
+    if (!others.length) { alert('No other members to transfer to.'); return; }
+    var names = others.map(function(m) { return m.username; }).join(', ');
+    var newCaptain = prompt('Transfer captain role to:\n'+names+'\n\nEnter username:');
+    if (!newCaptain) return;
+    var res2 = await fetch('/api/groups/'+currentGroupId+'/transfer', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:newCaptain.trim()})
+    });
+    var result = await res2.json();
+    if (result.error) { alert(result.error); return; }
+    alert(newCaptain.trim()+' is now the captain.');
+    closeGroupModal(); loadMyGroups();
+  } catch(e) { alert('Could not transfer captain role.'); }
 };
 
 window.copyInviteCode = function() {
