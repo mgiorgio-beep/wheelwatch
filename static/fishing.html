@@ -588,9 +588,6 @@ body {
 <div class="tab-panel" id="tab-satellite">
   <div class="section-header">Satellite &amp; Charts</div>
   <div id="sat-viewer"></div>
-  <div id="visual-sat-links"></div>
-  <div id="sst-links"></div>
-  <div id="chlorophyll-links"></div>
   <div class="fi-card" id="charts-card">
     <div class="fi-card-header">
       <div class="fi-card-title">Nautical Charts</div>
@@ -620,6 +617,9 @@ body {
     </div>
     <div class="fi-card-body"><div id="windfinder-widget"></div></div>
   </div>
+  <div id="visual-sat-links"></div>
+  <div id="sst-links"></div>
+  <div id="chlorophyll-links"></div>
 </div>
 
 <!-- ==================== TAB: LOG CATCH ==================== -->
@@ -1718,6 +1718,37 @@ function suggestVoiceReset() {
 
 // ==================== NAUTICAL CHART ====================
 var chartMap = null;
+var chartGpsMarker = null;
+var chartGpsAccCircle = null;
+var chartLastGps = null;
+
+function updateChartGps(lat, lon, acc) {
+  if (!chartMap) { chartLastGps = {lat:lat,lon:lon,acc:acc}; return; }
+  if (!chartGpsMarker) {
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="width:14px;height:14px;background:#0a84ff;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>',
+      iconSize: [14,14], iconAnchor: [7,7]
+    });
+    chartGpsMarker = L.marker([lat,lon], {icon:icon, zIndexOffset:1000}).addTo(chartMap);
+    chartGpsMarker.bindPopup('<div style="font-size:12px;font-weight:600;color:#000;">You are here</div>');
+    if (acc && acc < 500) {
+      chartGpsAccCircle = L.circle([lat,lon], {radius:acc, color:'#0a84ff', fillColor:'#0a84ff', fillOpacity:0.08, weight:1}).addTo(chartMap);
+    }
+  } else {
+    chartGpsMarker.setLatLng([lat,lon]);
+    if (chartGpsAccCircle) chartGpsAccCircle.setLatLng([lat,lon]);
+  }
+  chartLastGps = {lat:lat,lon:lon,acc:acc};
+}
+
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(
+    function(pos) { updateChartGps(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy); },
+    function() {},
+    {enableHighAccuracy:true, maximumAge:30000, timeout:15000}
+  );
+}
 
 window.loadChart = function() {
   var sel = document.getElementById('chart-select');
@@ -1742,6 +1773,9 @@ window.loadChart = function() {
     layers: '0,1,2,3,4,5,6,7', format: 'image/png', transparent: true,
     attribution: 'NOAA ENC', maxZoom: 18
   }).addTo(chartMap);
+
+  // Restore GPS pin if already acquired
+  if (chartLastGps) updateChartGps(chartLastGps.lat, chartLastGps.lon, chartLastGps.acc);
 
   // Overlay AIS vessels if data is available
   if (window._lastAISData) updateAISMarkers(window._lastAISData);

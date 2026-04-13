@@ -339,7 +339,7 @@ SATELLITE_LAYERS = {
         'format': 'image/jpeg',
     },
     'chlorophyll': {
-        'layer': 'MODIS_Aqua_Chlorophyll_a',
+        'layer': 'MODIS_Aqua_L2_Chlorophyll_A',
         'label': 'Chlorophyll-a — Aqua MODIS',
         'format': 'image/png',
     },
@@ -617,7 +617,7 @@ def _fetch_erddap_point(dataset, variable, lat, lon, delta=0.05, valid_range=Non
         f'?{variable}[(last)][({lat-delta:.3f}):({lat+delta:.3f})]'
         f'[({lon-delta:.3f}):({lon+delta:.3f})]'
     )
-    r = requests.get(url, timeout=15)
+    r = requests.get(url, timeout=1)
     r.raise_for_status()
     data = r.json()
     rows = data['table']['rows']
