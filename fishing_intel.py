@@ -44,6 +44,7 @@ CACHE_TTL = {
     'weather': 1800,     # 30 min
     'marine': 1800,
     'buoy': 900,         # 15 min
+    'ais': 43200,        # 12 hours
 }
 
 def _cached(key, ttl_key, fetcher):
@@ -718,64 +719,58 @@ AIS_BBOX = {
 def get_ais_vessels():
     """
     Fetch vessel positions in the Cape Cod / Monomoy area.
-    Uses AISHub free tier — register at aishub.net for credentials.
-    Requires AISHUB_USERNAME in .env
+    Uses VesselAPI free tier — 150 calls/90 days, cached 12h.
+    Requires VESSELAPI_KEY in .env
     """
     import os
     def fetch():
-        username = os.environ.get('AISHUB_USERNAME', '')
-        if not username:
-            logger.warning('AISHUB_USERNAME not set — AIS unavailable')
+        key = os.environ.get('VESSELAPI_KEY', '')
+        if not key:
+            logger.warning('VESSELAPI_KEY not set — AIS unavailable')
             return None
 
         params = {
-            'username': username,
-            'format': '1',
-            'output': 'json',
-            'compress': '0',
-            'latmin': AIS_BBOX['latmin'],
-            'latmax': AIS_BBOX['latmax'],
-            'lonmin': AIS_BBOX['lonmin'],
-            'lonmax': AIS_BBOX['lonmax'],
+            'filter.latBottom': AIS_BBOX['latmin'],
+            'filter.latTop':    AIS_BBOX['latmax'],
+            'filter.lonLeft':   AIS_BBOX['lonmin'],
+            'filter.lonRight':  AIS_BBOX['lonmax'],
         }
+        headers = {'Authorization': f'Bearer {key}'}
 
-        r = requests.get('https://data.aishub.net/ws.php',
-                         params=params, timeout=15)
+        r = requests.get('https://api.vesselapi.com/v1/location/vessels/bounding-box',
+                         params=params, headers=headers, timeout=15)
         r.raise_for_status()
         data = r.json()
 
-        if not data or len(data) < 2:
-            return {'vessels': [], 'fetched': datetime.now().isoformat()}
-
         vessels = []
-        for v in data[1]:
+        for v in data.get('vessels', []):
             try:
+                sog = v.get('sog')
+                cog = v.get('cog')
                 vessels.append({
-                    'mmsi': v.get('MMSI'),
-                    'name': v.get('NAME', 'Unknown').strip(),
-                    'lat': v.get('LATITUDE'),
-                    'lon': v.get('LONGITUDE'),
-                    'speed': v.get('SPEED'),
-                    'course': v.get('COG'),
-                    'type': v.get('TYPE'),
-                    'length': v.get('A', 0) + v.get('B', 0),
-                    'updated': v.get('TIME'),
+                    'mmsi':    v.get('mmsi'),
+                    'name':    (v.get('vessel_name') or 'Unknown').strip(),
+                    'lat':     v.get('latitude'),
+                    'lon':     v.get('longitude'),
+                    'speed':   int(sog * 10) if sog is not None else None,
+                    'course':  int(cog * 10) if cog is not None else None,
+                    'type':    None,
+                    'length':  None,
+                    'updated': v.get('timestamp'),
                 })
             except Exception:
                 pass
 
-        fishing_vessels = [v for v in vessels if v.get('type') in (30, 36, 37, None)]
-
         return {
-            'vessels': vessels,
-            'fishing_vessels': fishing_vessels,
-            'total': len(vessels),
-            'fishing_count': len(fishing_vessels),
-            'bbox': AIS_BBOX,
-            'fetched': datetime.now().isoformat(),
+            'vessels':         vessels,
+            'fishing_vessels': [],
+            'total':           len(vessels),
+            'fishing_count':   0,
+            'bbox':            AIS_BBOX,
+            'fetched':         datetime.now().isoformat(),
         }
 
-    return _cached('ais_vessels', 'buoy', fetch)
+    return _cached('ais_vessels', 'ais', fetch)
 
 
 # ==================== CAPTAIN'S BRIEFING ====================
