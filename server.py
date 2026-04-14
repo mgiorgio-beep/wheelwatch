@@ -84,6 +84,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN phone_verify_code TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN phone_verify_expires REAL DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT ''",
     ]:
         try:
             db.execute(col_sql)
@@ -217,10 +219,14 @@ def login():
 def signup():
     import re
     if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
         phone = request.form.get('phone', '').strip()
+        if not first_name or not last_name:
+            return render_auth_page('signup', error='First and last name required')
         if not username or not password:
             return render_auth_page('signup', error='Email and password required')
         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', username):
@@ -234,7 +240,8 @@ def signup():
         if existing:
             return render_auth_page('signup', error='Email already registered')
         pw_hash = generate_password_hash(password)
-        db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, pw_hash))
+        db.execute('INSERT INTO users (username, password_hash, first_name, last_name) VALUES (?, ?, ?, ?)',
+                   (username, pw_hash, first_name, last_name))
         db.commit()
         user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         session.permanent = True
@@ -263,7 +270,11 @@ def render_auth_page(mode, error=None):
     if mode == 'signup':
         form = '''
         <form method="POST">
-        <input type="email" name="username" placeholder="Email address" autocomplete="email" autofocus>
+        <div style="display:flex;gap:8px;">
+        <input type="text" name="first_name" placeholder="First name" autocomplete="given-name" autofocus style="flex:1">
+        <input type="text" name="last_name" placeholder="Last name" autocomplete="family-name" style="flex:1">
+        </div>
+        <input type="email" name="username" placeholder="Email address" autocomplete="email">
         <input type="password" name="password" placeholder="Password" autocomplete="new-password">
         <input type="password" name="confirm" placeholder="Confirm password" autocomplete="new-password">
         <div style="margin:12px 0 4px;text-align:left">
@@ -1639,6 +1650,30 @@ def admin_dashboard():
   {row("Pattern summary", p_summary)}
 </table>""")}
 
+{section("Data Feeds")}
+<div id="feed-status" style="background:#1C1C1E;border-radius:14px;padding:16px 20px;margin-bottom:12px;border:1px solid #2C2C2E">
+  <div style="color:#48484A;font-size:13px">Loading feed status...</div>
+</div>
+<script>
+fetch('/api/fishing/feed-status')
+  .then(function(r){{ return r.json(); }})
+  .then(function(data){{
+    var html = '<table style="width:100%;border-collapse:collapse">';
+    data.feeds.forEach(function(f){{
+      var color = f.status === 'ok' ? '#34C759' : f.status === 'slow' ? '#FF9F0A' : '#FF453A';
+      var pill = '<span class="pill" style="background:' + color + '18;color:' + color + ';border:1px solid ' + color + '30">' + f.status + '</span>';
+      var age = f.age ? '<span style="color:#8E8E93;font-size:12px"> &middot; ' + f.age + '</span>' : '';
+      html += '<tr><td style="color:#8E8E93;padding:6px 0;font-size:13px;width:220px">' + f.name + '</td>';
+      html += '<td style="font-size:13px">' + pill + age + '</td></tr>';
+    }});
+    html += '</table>';
+    document.getElementById('feed-status').innerHTML = html;
+  }})
+  .catch(function(){{
+    document.getElementById('feed-status').innerHTML = '<div style="color:#FF453A;font-size:13px">Failed to load feed status</div>';
+  }});
+</script>
+
 {section(f"Captains ({len(users)})")}
 '''
 
@@ -1735,6 +1770,55 @@ def admin_dashboard():
 
     html += '</body></html>'
     return html
+
+
+@app.route('/api/fishing/feed-status')
+@admin_required
+def api_feed_status():
+    """Quick health check of all data feeds — just status, not values."""
+    import time as _time
+    from fishing_intel import (
+        _cache, get_buoy, get_nantucket_buoy, get_spot_buoy,
+        get_weather, get_tides, get_currents, get_erddap_conditions, get_ais_vessels
+    )
+
+    feeds = []
+    now = _time.time()
+
+    def check_feed(name, cache_key, fetcher, ttl=1800):
+        """Check if feed is cached and fresh, or try a quick fetch."""
+        if cache_key in _cache:
+            val, ts = _cache[cache_key]
+            age_sec = int(now - ts)
+            if age_sec < ttl:
+                status = 'ok'
+            else:
+                status = 'stale'
+            mins = age_sec // 60
+            age_str = f'{mins}m ago' if mins > 0 else 'just now'
+            feeds.append({'name': name, 'status': status, 'age': age_str})
+        else:
+            # Not cached — try to fetch
+            try:
+                result = fetcher()
+                if result:
+                    feeds.append({'name': name, 'status': 'ok', 'age': 'just fetched'})
+                else:
+                    feeds.append({'name': name, 'status': 'down', 'age': ''})
+            except Exception:
+                feeds.append({'name': name, 'status': 'down', 'age': ''})
+
+    check_feed('NDBC Buoy 44018 (SE Cape Cod)', 'buoy_44018', lambda: get_buoy('44018'), 900)
+    check_feed('NDBC Buoy 44020 (Nantucket Sound)', 'buoy_44020', get_nantucket_buoy, 900)
+    check_feed('WHOI Spotter (Chatham)', 'spot_buoy', get_spot_buoy, 900)
+    check_feed('NWS Weather (Chatham)', 'weather', get_weather, 1800)
+    check_feed('NOAA Tides (Chatham)', 'tides_chatham', lambda: get_tides('chatham'), 3600)
+    check_feed('NOAA Currents (Pollock Rip)', 'currents_pollock_rip', lambda: get_currents('pollock_rip'), 3600)
+    check_feed('NOAA Currents (Chatham Roads)', 'currents_chatham_roads', lambda: get_currents('chatham_roads'), 3600)
+    check_feed('ERDDAP SST/Chlorophyll', 'erddap_conditions', get_erddap_conditions, 3600)
+    check_feed('AIS Vessel Tracking', 'ais_vessels', get_ais_vessels, 43200)
+
+    return jsonify({'feeds': feeds, 'checked': datetime.now().isoformat()})
 
 
 # Register routes

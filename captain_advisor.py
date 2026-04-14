@@ -251,6 +251,26 @@ def get_live_data_context():
         ctx.append(f"  Wind: {wdir}° at {wspd}m/s, gusts {gst}m/s")
         ctx.append("")
 
+    # Nantucket Sound buoy (44020)
+    nb = briefing.get('nantucket_buoy')
+    if nb and nb.get('latest'):
+        s = nb['latest']
+        ctx.append(f"BUOY 44020 — Nantucket Sound (41.50N, 70.28W):")
+        if s.get('sst_f'):
+            ctx.append(f"  Water temp: {s['sst_f']}°F ({s['sst_c']}°C)")
+        if s.get('wave_height_ft'):
+            ctx.append(f"  Waves: {s['wave_height_ft']}ft @ {s.get('wave_period', '?')}s from {s.get('wave_direction', '?')}°")
+        if s.get('wind_speed_kt'):
+            wind_str = f"  Wind: {s.get('wind_direction', '?')}° at {s['wind_speed_kt']}kt"
+            if s.get('wind_gust_kt'):
+                wind_str += f", gusts {s['wind_gust_kt']}kt"
+            ctx.append(wind_str)
+        if s.get('air_temp_f'):
+            ctx.append(f"  Air temp: {s['air_temp_f']}°F")
+        if s.get('pressure_hpa'):
+            ctx.append(f"  Pressure: {s['pressure_hpa']} hPa")
+        ctx.append("")
+
     # WHOI Spotter buoy (Chatham — closest to fishing grounds)
     spot = briefing.get('spot_buoy')
     if spot and spot.get('latest'):

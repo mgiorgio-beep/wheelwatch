@@ -224,6 +224,66 @@ def get_buoy(station='44018'):
     return _cached(f'buoy_{station}', 'buoy', fetch)
 
 
+# ==================== NANTUCKET SOUND BUOY (44020) ====================
+
+def get_nantucket_buoy():
+    """Get latest observations from NDBC buoy 44020 in Nantucket Sound."""
+    def fetch():
+        url = 'https://www.ndbc.noaa.gov/data/realtime2/44020.txt'
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        lines = r.text.strip().split('\n')
+        if len(lines) < 3:
+            return None
+        headers = lines[0].replace('#', '').split()
+        # Get last 6 observations for trend
+        observations = []
+        for line in lines[2:8]:
+            vals = line.split()
+            obs = {}
+            for i, h in enumerate(headers):
+                if i < len(vals):
+                    val = vals[i]
+                    obs[h] = None if val == 'MM' else val
+            # Convert to useful units
+            parsed = {
+                'time': f"{obs.get('YY','')}-{obs.get('MM','')}-{obs.get('DD','')} {obs.get('hh','')}:{obs.get('mm','')} UTC",
+            }
+            if obs.get('WTMP'):
+                parsed['sst_c'] = float(obs['WTMP'])
+                parsed['sst_f'] = round(float(obs['WTMP']) * 9/5 + 32, 1)
+            if obs.get('WSPD'):
+                parsed['wind_speed_kt'] = round(float(obs['WSPD']) * 1.944, 1)
+            if obs.get('GST'):
+                parsed['wind_gust_kt'] = round(float(obs['GST']) * 1.944, 1)
+            if obs.get('WDIR'):
+                parsed['wind_direction'] = int(obs['WDIR'])
+            if obs.get('WVHT'):
+                parsed['wave_height_m'] = float(obs['WVHT'])
+                parsed['wave_height_ft'] = round(float(obs['WVHT']) * 3.281, 1)
+            if obs.get('DPD'):
+                parsed['wave_period'] = float(obs['DPD'])
+            if obs.get('MWD'):
+                parsed['wave_direction'] = int(obs['MWD'])
+            if obs.get('PRES'):
+                parsed['pressure_hpa'] = float(obs['PRES'])
+            if obs.get('ATMP'):
+                parsed['air_temp_c'] = float(obs['ATMP'])
+                parsed['air_temp_f'] = round(float(obs['ATMP']) * 9/5 + 32, 1)
+            observations.append(parsed)
+        if not observations:
+            return None
+        return {
+            'station': '44020',
+            'name': 'Nantucket Sound',
+            'location': {'lat': 41.497, 'lon': -70.283},
+            'latest': observations[0],
+            'history': observations,
+            'fetched': datetime.now().isoformat(),
+        }
+    return _cached('buoy_44020', 'buoy', fetch)
+
+
 # ==================== WHOI SPOT BUOY (Chatham) ====================
 
 SPOT_DATASET = 'WHOI_SPOT_32758C'
@@ -237,13 +297,13 @@ def get_spot_buoy():
     """Get latest observations from WHOI Spotter buoy off Chatham via NERACOOS ERDDAP.
     Updates every ~30 min. Returns wave, wind, SST, and pressure data."""
     def fetch():
-        # Request last 3 hours of data for trend
+        # Request last 3 hours of data for trend (ERDDAP can be slow — 60s timeout)
         since = (datetime.now() - timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%SZ')
         url = (
             f'{NERACOOS_ERDDAP}/{SPOT_DATASET}.json'
             f'?{SPOT_VARS}&time>={since}&orderBy("time")'
         )
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, timeout=60)
         r.raise_for_status()
         data = r.json()
         rows = data['table']['rows']
@@ -875,6 +935,9 @@ def get_briefing():
     # Buoy
     briefing['buoy'] = get_buoy()
 
+    # Nantucket Sound buoy (44020)
+    briefing['nantucket_buoy'] = get_nantucket_buoy()
+
     # WHOI Spotter buoy (Chatham)
     briefing['spot_buoy'] = get_spot_buoy()
 
@@ -938,6 +1001,12 @@ def register_routes(app, login_required):
         station = request.args.get('station', '44018')
         data = get_buoy(station)
         return jsonify(data) if data else jsonify({'error': 'unavailable'}), 503
+
+    @app.route('/api/fishing/nantucket')
+    @login_required
+    def api_fishing_nantucket():
+        data = get_nantucket_buoy()
+        return jsonify(data) if data else (jsonify({'error': 'Nantucket buoy unavailable'}), 503)
 
     @app.route('/api/fishing/spot')
     @login_required

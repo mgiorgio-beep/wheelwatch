@@ -1121,6 +1121,7 @@ function renderBriefing(data) {
   try { dashHtml += renderQuickLook(data); } catch(e) { console.error('QuickLook render error:', e); }
   try { dashHtml += renderWindTrend(data.wind_history, data.weather); } catch(e) { console.error('WindTrend render error:', e); }
   try { dashHtml += renderBuoy(data.buoy); } catch(e) { console.error('Buoy render error:', e); }
+  try { dashHtml += renderNantucketBuoy(data.nantucket_buoy); } catch(e) { console.error('NantucketBuoy render error:', e); }
   try { dashHtml += renderSpotBuoy(data.spot_buoy); } catch(e) { console.error('SpotBuoy render error:', e); }
   try { dashHtml += renderAIS(data.ais); } catch(e) { console.error('AIS render error:', e); }
   try { dashHtml += renderWeatherHourly(data.weather); } catch(e) { console.error('WeatherHourly render error:', e); }
@@ -1202,6 +1203,32 @@ function renderBuoy(buoy) {
 
 function buoyItem(val, label) {
   return '<div class="fi-buoy-item"><div class="fi-buoy-val">' + val + '</div><div class="fi-buoy-label">' + label + '</div></div>';
+}
+
+function renderNantucketBuoy(nb) {
+  if (!nb || !nb.latest) return '';
+  var s = nb.latest;
+  var sst = s.sst_f ? s.sst_f + 'F' : '--';
+  var waveHt = s.wave_height_ft ? s.wave_height_ft + ' ft' : '--';
+  var wavePd = s.wave_period ? s.wave_period + 's' : '--';
+  var waveDir = s.wave_direction ? s.wave_direction + '°' : '--';
+  var windSpd = s.wind_speed_kt ? s.wind_speed_kt + ' kt' : '--';
+  var windGust = s.wind_gust_kt ? s.wind_gust_kt + ' kt' : '--';
+  var windDir = s.wind_direction ? s.wind_direction + '°' : '--';
+  var airTemp = s.air_temp_f ? s.air_temp_f + 'F' : '--';
+  return '<div class="fi-card"><div class="fi-card-header">' +
+    '<div class="fi-card-title">Buoy 44020 — Nantucket Sound</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body"><div class="fi-buoy-grid">' +
+    buoyItem(sst, 'WATER TEMP') +
+    buoyItem(waveHt, 'WAVES') +
+    buoyItem(wavePd, 'PERIOD') +
+    buoyItem(waveDir, 'WAVE DIR') +
+    buoyItem(windSpd, 'WIND') +
+    buoyItem(windGust, 'GUST') +
+    buoyItem(windDir, 'WIND DIR') +
+    buoyItem(airTemp, 'AIR TEMP') +
+    '</div></div></div>';
 }
 
 function renderSpotBuoy(spot) {
