@@ -1660,7 +1660,7 @@ fetch('/api/fishing/feed-status')
   .then(function(data){{
     var html = '<table style="width:100%;border-collapse:collapse">';
     data.feeds.forEach(function(f){{
-      var color = f.status === 'ok' ? '#34C759' : f.status === 'slow' ? '#FF9F0A' : '#FF453A';
+      var color = f.status === 'ok' ? '#34C759' : f.status === 'stale' ? '#FF9F0A' : f.status === 'no data' ? '#8E8E93' : '#FF453A';
       var pill = '<span class="pill" style="background:' + color + '18;color:' + color + ';border:1px solid ' + color + '30">' + f.status + '</span>';
       var age = f.age ? '<span style="color:#8E8E93;font-size:12px"> &middot; ' + f.age + '</span>' : '';
       html += '<tr><td style="color:#8E8E93;padding:6px 0;font-size:13px;width:220px">' + f.name + '</td>';
@@ -1777,46 +1777,34 @@ fetch('/api/fishing/feed-status')
 def api_feed_status():
     """Quick health check of all data feeds — just status, not values."""
     import time as _time
-    from fishing_intel import (
-        _cache, get_buoy, get_nantucket_buoy, get_spot_buoy,
-        get_weather, get_tides, get_currents, get_erddap_conditions, get_ais_vessels
-    )
+    from fishing_intel import _cache
 
     feeds = []
     now = _time.time()
 
-    def check_feed(name, cache_key, fetcher, ttl=1800):
-        """Check if feed is cached and fresh, or try a quick fetch."""
+    def check_feed(name, cache_key, ttl=1800):
+        """Check if feed is cached and fresh. Cache-only — no live fetching."""
         if cache_key in _cache:
             val, ts = _cache[cache_key]
             age_sec = int(now - ts)
-            if age_sec < ttl:
-                status = 'ok'
-            else:
-                status = 'stale'
+            status = 'ok' if age_sec < ttl else 'stale'
             mins = age_sec // 60
             age_str = f'{mins}m ago' if mins > 0 else 'just now'
-            feeds.append({'name': name, 'status': status, 'age': age_str})
+            has_data = val is not None
+            feeds.append({'name': name, 'status': status if has_data else 'empty', 'age': age_str})
         else:
-            # Not cached — try to fetch
-            try:
-                result = fetcher()
-                if result:
-                    feeds.append({'name': name, 'status': 'ok', 'age': 'just fetched'})
-                else:
-                    feeds.append({'name': name, 'status': 'down', 'age': ''})
-            except Exception:
-                feeds.append({'name': name, 'status': 'down', 'age': ''})
+            feeds.append({'name': name, 'status': 'no data', 'age': 'not yet fetched'})
 
-    check_feed('NDBC Buoy 44018 (SE Cape Cod)', 'buoy_44018', lambda: get_buoy('44018'), 900)
-    check_feed('NDBC Buoy 44020 (Nantucket Sound)', 'buoy_44020', get_nantucket_buoy, 900)
-    check_feed('WHOI Spotter (Chatham)', 'spot_buoy', get_spot_buoy, 900)
-    check_feed('NWS Weather (Chatham)', 'weather', get_weather, 1800)
-    check_feed('NOAA Tides (Chatham)', 'tides_chatham', lambda: get_tides('chatham'), 3600)
-    check_feed('NOAA Currents (Pollock Rip)', 'currents_pollock_rip', lambda: get_currents('pollock_rip'), 3600)
-    check_feed('NOAA Currents (Chatham Roads)', 'currents_chatham_roads', lambda: get_currents('chatham_roads'), 3600)
-    check_feed('ERDDAP SST/Chlorophyll', 'erddap_conditions', get_erddap_conditions, 3600)
-    check_feed('AIS Vessel Tracking', 'ais_vessels', get_ais_vessels, 43200)
+    check_feed('NDBC Buoy 44018 (SE Cape Cod)', 'buoy_44018', 900)
+    check_feed('NDBC Buoy 44020 (Nantucket Sound)', 'buoy_44020', 900)
+    check_feed('WHOI Spotter (Chatham)', 'spot_buoy', 900)
+    check_feed('NDBC Buoy 44090 (Cape Cod Bay)', 'buoy_44090', 900)
+    check_feed('NWS Weather (Chatham)', 'weather', 1800)
+    check_feed('NOAA Tides (Chatham)', 'tides_chatham', 3600)
+    check_feed('NOAA Currents (Pollock Rip)', 'currents_pollock_rip', 3600)
+    check_feed('NOAA Currents (Chatham Roads)', 'currents_chatham_roads', 3600)
+    check_feed('ERDDAP SST/Chlorophyll', 'erddap_conditions', 3600)
+    check_feed('AIS Vessel Tracking', 'ais_vessels', 43200)
 
     return jsonify({'feeds': feeds, 'checked': datetime.now().isoformat()})
 
