@@ -1182,15 +1182,23 @@ function renderLunar(lunar) {
 function renderBuoy(buoy) {
   if (!buoy || !buoy.observation) return '';
   var obs = buoy.observation;
+  // Check if buoy has any real data (not all MM/null)
+  var hasData = obs.WTMP || obs.WVHT || obs.WSPD;
   var waveHt = obs.WVHT ? parseFloat2(obs.WVHT) + ' ft' : '--';
   var wavePd = obs.DPD ? parseFloat2(obs.DPD) + 's' : '--';
   var waterTemp = obs.WTMP ? (parseFloat(obs.WTMP) * 9/5 + 32).toFixed(1) + 'F' : '--';
   var windSpd = obs.WSPD ? (parseFloat(obs.WSPD) * 1.944).toFixed(0) + ' kt' : '--';
   var windGust = obs.GST ? (parseFloat(obs.GST) * 1.944).toFixed(0) + ' kt' : '--';
   var windDir = obs.WDIR || '--';
-  return '<div class="fi-card"><div class="fi-card-header">' +
+  var badge = hasData ? '<span class="fi-badge fi-badge-live">LIVE</span>' :
+    '<span class="fi-badge" style="background:#48484A30;color:#8E8E93;border:1px solid #48484A">OFFLINE</span>';
+  var opacity = hasData ? '1' : '0.45';
+  var note = hasData ? '' :
+    '<div style="font-size:11px;color:#8E8E93;margin-top:10px;font-style:italic;line-height:1.4">' +
+    'Station not reporting &mdash; NDBC shows no data for 45+ days. May be offline for maintenance.</div>';
+  return '<div class="fi-card" style="opacity:' + opacity + '"><div class="fi-card-header">' +
     '<div class="fi-card-title">Buoy 44018 -- SE Cape Cod</div>' +
-    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    badge + '</div>' +
     '<div class="fi-card-body"><div class="fi-buoy-grid">' +
     buoyItem(waterTemp, 'WATER TEMP') +
     buoyItem(waveHt, 'WAVE HEIGHT') +
@@ -1198,7 +1206,7 @@ function renderBuoy(buoy) {
     buoyItem(windSpd, 'WIND SPEED') +
     buoyItem(windGust, 'GUST') +
     buoyItem(windDir + ' deg', 'WIND DIR') +
-    '</div></div></div>';
+    '</div>' + note + '</div></div>';
 }
 
 function buoyItem(val, label) {
@@ -1208,6 +1216,7 @@ function buoyItem(val, label) {
 function renderNantucketBuoy(nb) {
   if (!nb || !nb.latest) return '';
   var s = nb.latest;
+  var hasData = s.sst_f || s.wave_height_ft || s.wind_speed_kt;
   var sst = s.sst_f ? s.sst_f + 'F' : '--';
   var waveHt = s.wave_height_ft ? s.wave_height_ft + ' ft' : '--';
   var wavePd = s.wave_period ? s.wave_period + 's' : '--';
@@ -1216,9 +1225,15 @@ function renderNantucketBuoy(nb) {
   var windGust = s.wind_gust_kt ? s.wind_gust_kt + ' kt' : '--';
   var windDir = s.wind_direction ? s.wind_direction + '°' : '--';
   var airTemp = s.air_temp_f ? s.air_temp_f + 'F' : '--';
-  return '<div class="fi-card"><div class="fi-card-header">' +
+  var badge = hasData ? '<span class="fi-badge fi-badge-live">LIVE</span>' :
+    '<span class="fi-badge" style="background:#48484A30;color:#8E8E93;border:1px solid #48484A">OFFLINE</span>';
+  var opacity = hasData ? '1' : '0.45';
+  var note = hasData ? '' :
+    '<div style="font-size:11px;color:#8E8E93;margin-top:10px;font-style:italic;line-height:1.4">' +
+    'Station not reporting.</div>';
+  return '<div class="fi-card" style="opacity:' + opacity + '"><div class="fi-card-header">' +
     '<div class="fi-card-title">Buoy 44020 — Nantucket Sound</div>' +
-    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    badge + '</div>' +
     '<div class="fi-card-body"><div class="fi-buoy-grid">' +
     buoyItem(sst, 'WATER TEMP') +
     buoyItem(waveHt, 'WAVES') +
@@ -1228,12 +1243,13 @@ function renderNantucketBuoy(nb) {
     buoyItem(windGust, 'GUST') +
     buoyItem(windDir, 'WIND DIR') +
     buoyItem(airTemp, 'AIR TEMP') +
-    '</div></div></div>';
+    '</div>' + note + '</div></div>';
 }
 
 function renderSpotBuoy(spot) {
   if (!spot || !spot.latest) return '';
   var s = spot.latest;
+  var hasData = s.wave_height_ft != null || s.sst_f != null;
   var waveHt = s.wave_height_ft != null ? s.wave_height_ft + ' ft' : '--';
   var wavePk = s.peak_period != null ? s.peak_period + 's' : '--';
   var waveMn = s.mean_period != null ? s.mean_period + 's' : '--';
@@ -1254,9 +1270,15 @@ function renderSpotBuoy(spot) {
       else trend = ' →';
     }
   }
-  return '<div class="fi-card"><div class="fi-card-header">' +
+  var badge = hasData ? '<span class="fi-badge fi-badge-live">LIVE</span>' :
+    '<span class="fi-badge" style="background:#48484A30;color:#8E8E93;border:1px solid #48484A">OFFLINE</span>';
+  var opacity = hasData ? '1' : '0.45';
+  var note = hasData ? '' :
+    '<div style="font-size:11px;color:#8E8E93;margin-top:10px;font-style:italic;line-height:1.4">' +
+    'NERACOOS ERDDAP not responding. Data will appear when connection is restored.</div>';
+  return '<div class="fi-card" style="opacity:' + opacity + '"><div class="fi-card-header">' +
     '<div class="fi-card-title">WHOI Spotter — Chatham</div>' +
-    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    badge + '</div>' +
     '<div class="fi-card-body"><div class="fi-buoy-grid">' +
     buoyItem(sst, 'WATER TEMP') +
     buoyItem(waveHt + trend, 'WAVES') +
@@ -1265,7 +1287,7 @@ function renderSpotBuoy(spot) {
     buoyItem(windSpd, 'WIND') +
     buoyItem(windDir, 'WIND DIR') +
     buoyItem(pressure, 'PRESSURE') +
-    '</div></div></div>';
+    '</div>' + note + '</div></div>';
 }
 
 function renderAIS(ais) {
