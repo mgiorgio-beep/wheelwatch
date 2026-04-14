@@ -251,6 +251,32 @@ def get_live_data_context():
         ctx.append(f"  Wind: {wdir}° at {wspd}m/s, gusts {gst}m/s")
         ctx.append("")
 
+    # WHOI Spotter buoy (Chatham — closest to fishing grounds)
+    spot = briefing.get('spot_buoy')
+    if spot and spot.get('latest'):
+        s = spot['latest']
+        ctx.append(f"WHOI SPOTTER BUOY — Chatham ({s.get('lat', ''):.4f}N, {abs(s.get('lon', 0)):.4f}W):")
+        if s.get('wave_height_ft') is not None:
+            ctx.append(f"  Waves: {s['wave_height_ft']}ft ({s['wave_height_m']}m) @ {s['peak_period']}s peak, {s['mean_period']}s mean")
+            if s.get('peak_direction') is not None:
+                ctx.append(f"  Wave direction: {s['peak_direction']:.0f}° (spread {s.get('peak_spread', 0):.0f}°)")
+        if s.get('wind_speed_kt') is not None:
+            ctx.append(f"  Wind: {s['wind_direction']:.0f}° at {s['wind_speed_kt']}kt ({s['wind_speed_ms']}m/s)")
+        if s.get('sst_f') is not None:
+            ctx.append(f"  Water temp: {s['sst_f']}°F ({s['sst_c']}°C)")
+        if s.get('pressure_hpa') is not None:
+            ctx.append(f"  Pressure: {s['pressure_hpa']} hPa")
+        ctx.append(f"  Updated: {s.get('time', 'unknown')}")
+        # Show trend if multiple readings
+        hist = spot.get('history', [])
+        if len(hist) >= 2:
+            first, last = hist[0], hist[-1]
+            if first.get('wave_height_ft') is not None and last.get('wave_height_ft') is not None:
+                delta = last['wave_height_ft'] - first['wave_height_ft']
+                trend = 'building' if delta > 0.2 else ('dropping' if delta < -0.2 else 'steady')
+                ctx.append(f"  Wave trend (last {len(hist)} readings): {trend} ({first['wave_height_ft']}ft → {last['wave_height_ft']}ft)")
+        ctx.append("")
+
     # SST & Chlorophyll from ERDDAP satellite data
     erddap = briefing.get('erddap')
     if erddap:

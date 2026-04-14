@@ -35,6 +35,7 @@ CHATHAM_LON = -69.9597
 
 NOAA_TIDE_BASE = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter'
 NWS_BASE = 'https://api.weather.gov'
+NERACOOS_ERDDAP = 'https://data.neracoos.org/erddap/tabledap'
 
 # --- Cache with TTL ---
 _cache = {}
@@ -221,6 +222,75 @@ def get_buoy(station='44018'):
                 continue
         return None
     return _cached(f'buoy_{station}', 'buoy', fetch)
+
+
+# ==================== WHOI SPOT BUOY (Chatham) ====================
+
+SPOT_DATASET = 'WHOI_SPOT_32758C'
+SPOT_VARS = (
+    'stationID,latitude,longitude,significantWaveHeight,peakPeriod,meanPeriod,'
+    'peakDirection,meanDirection,peakDirectionalSpread,meanDirectionalSpread,'
+    'windSpeed,windDirection,temperature,atmospheric_pressure,time'
+)
+
+def get_spot_buoy():
+    """Get latest observations from WHOI Spotter buoy off Chatham via NERACOOS ERDDAP.
+    Updates every ~30 min. Returns wave, wind, SST, and pressure data."""
+    def fetch():
+        # Request last 3 hours of data for trend
+        since = (datetime.now() - timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        url = (
+            f'{NERACOOS_ERDDAP}/{SPOT_DATASET}.json'
+            f'?{SPOT_VARS}&time>={since}&orderBy("time")'
+        )
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        rows = data['table']['rows']
+        cols = data['table']['columnNames']
+        if not rows:
+            return None
+
+        def row_to_obs(row):
+            d = dict(zip(cols, row))
+            wvht_m = d.get('significantWaveHeight')
+            wvht_ft = round(wvht_m * 3.281, 1) if wvht_m is not None else None
+            wspd_ms = d.get('windSpeed')
+            wspd_kt = round(wspd_ms * 1.944, 1) if wspd_ms is not None else None
+            temp_c = d.get('temperature')
+            temp_f = round(temp_c * 9/5 + 32, 1) if temp_c is not None else None
+            return {
+                'time': d.get('time'),
+                'lat': d.get('latitude'),
+                'lon': d.get('longitude'),
+                'wave_height_m': wvht_m,
+                'wave_height_ft': wvht_ft,
+                'peak_period': d.get('peakPeriod'),
+                'mean_period': d.get('meanPeriod'),
+                'peak_direction': d.get('peakDirection'),
+                'mean_direction': d.get('meanDirection'),
+                'peak_spread': d.get('peakDirectionalSpread'),
+                'mean_spread': d.get('meanDirectionalSpread'),
+                'wind_speed_ms': wspd_ms,
+                'wind_speed_kt': wspd_kt,
+                'wind_direction': d.get('windDirection'),
+                'sst_c': temp_c,
+                'sst_f': temp_f,
+                'pressure_hpa': d.get('atmospheric_pressure'),
+            }
+
+        observations = [row_to_obs(r) for r in rows]
+        latest = observations[-1]
+
+        return {
+            'station': SPOT_DATASET,
+            'name': 'WHOI Spotter — Chatham, MA',
+            'latest': latest,
+            'history': observations,
+            'readings': len(observations),
+            'fetched': datetime.now().isoformat(),
+        }
+    return _cached('spot_buoy', 'buoy', fetch)
 
 
 # ==================== SST & CHLOROPHYLL ====================
@@ -805,6 +875,9 @@ def get_briefing():
     # Buoy
     briefing['buoy'] = get_buoy()
 
+    # WHOI Spotter buoy (Chatham)
+    briefing['spot_buoy'] = get_spot_buoy()
+
     # Tide chart data
     briefing['tide_chart'] = get_tide_hourly('chatham', 48)
 
@@ -865,6 +938,12 @@ def register_routes(app, login_required):
         station = request.args.get('station', '44018')
         data = get_buoy(station)
         return jsonify(data) if data else jsonify({'error': 'unavailable'}), 503
+
+    @app.route('/api/fishing/spot')
+    @login_required
+    def api_fishing_spot():
+        data = get_spot_buoy()
+        return jsonify(data) if data else (jsonify({'error': 'WHOI Spotter unavailable'}), 503)
 
     @app.route('/api/fishing/sst')
     @login_required

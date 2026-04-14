@@ -1044,6 +1044,16 @@ function renderQuickLook(data) {
     if (obs.WVHT) waveHt = parseFloat(obs.WVHT).toFixed(1);
     if (obs.DPD) wavePd = parseFloat(obs.DPD).toFixed(0);
   }
+  // Prefer SPOT buoy (Chatham) for water temp, waves, wind — closer to fishing grounds
+  if (data.spot_buoy && data.spot_buoy.latest) {
+    var sp = data.spot_buoy.latest;
+    if (sp.sst_f != null) waterTemp = Math.round(sp.sst_f);
+    if (sp.wave_height_ft != null) waveHt = sp.wave_height_ft.toFixed(1);
+    if (sp.peak_period != null) wavePd = Math.round(sp.peak_period);
+    if (sp.wind_speed_kt != null) wind = Math.round(sp.wind_speed_kt);
+    if (sp.wind_direction != null) windDir = Math.round(sp.wind_direction);
+    gust = ''; // SPOT doesn't report gusts
+  }
   var nextTide = '';
   if (data.tides) {
     for (var key in data.tides) {
@@ -1111,6 +1121,7 @@ function renderBriefing(data) {
   try { dashHtml += renderQuickLook(data); } catch(e) { console.error('QuickLook render error:', e); }
   try { dashHtml += renderWindTrend(data.wind_history, data.weather); } catch(e) { console.error('WindTrend render error:', e); }
   try { dashHtml += renderBuoy(data.buoy); } catch(e) { console.error('Buoy render error:', e); }
+  try { dashHtml += renderSpotBuoy(data.spot_buoy); } catch(e) { console.error('SpotBuoy render error:', e); }
   try { dashHtml += renderAIS(data.ais); } catch(e) { console.error('AIS render error:', e); }
   try { dashHtml += renderWeatherHourly(data.weather); } catch(e) { console.error('WeatherHourly render error:', e); }
   try { dashHtml += renderLunar(data.lunar); } catch(e) { console.error('Lunar render error:', e); }
@@ -1191,6 +1202,43 @@ function renderBuoy(buoy) {
 
 function buoyItem(val, label) {
   return '<div class="fi-buoy-item"><div class="fi-buoy-val">' + val + '</div><div class="fi-buoy-label">' + label + '</div></div>';
+}
+
+function renderSpotBuoy(spot) {
+  if (!spot || !spot.latest) return '';
+  var s = spot.latest;
+  var waveHt = s.wave_height_ft != null ? s.wave_height_ft + ' ft' : '--';
+  var wavePk = s.peak_period != null ? s.peak_period + 's' : '--';
+  var waveMn = s.mean_period != null ? s.mean_period + 's' : '--';
+  var waveDir = s.peak_direction != null ? Math.round(s.peak_direction) + '°' : '--';
+  var windSpd = s.wind_speed_kt != null ? s.wind_speed_kt + ' kt' : '--';
+  var windDir = s.wind_direction != null ? Math.round(s.wind_direction) + '°' : '--';
+  var sst = s.sst_f != null ? s.sst_f + 'F' : '--';
+  var pressure = s.pressure_hpa != null ? s.pressure_hpa + ' hPa' : '--';
+  // Wave trend
+  var trend = '';
+  var hist = spot.history || [];
+  if (hist.length >= 2) {
+    var first = hist[0], last = hist[hist.length - 1];
+    if (first.wave_height_ft != null && last.wave_height_ft != null) {
+      var delta = last.wave_height_ft - first.wave_height_ft;
+      if (delta > 0.2) trend = ' ↑';
+      else if (delta < -0.2) trend = ' ↓';
+      else trend = ' →';
+    }
+  }
+  return '<div class="fi-card"><div class="fi-card-header">' +
+    '<div class="fi-card-title">WHOI Spotter — Chatham</div>' +
+    '<span class="fi-badge fi-badge-live">LIVE</span></div>' +
+    '<div class="fi-card-body"><div class="fi-buoy-grid">' +
+    buoyItem(sst, 'WATER TEMP') +
+    buoyItem(waveHt + trend, 'WAVES') +
+    buoyItem(wavePk + ' / ' + waveMn, 'PEAK / MEAN') +
+    buoyItem(waveDir, 'WAVE DIR') +
+    buoyItem(windSpd, 'WIND') +
+    buoyItem(windDir, 'WIND DIR') +
+    buoyItem(pressure, 'PRESSURE') +
+    '</div></div></div>';
 }
 
 function renderAIS(ais) {
@@ -2074,6 +2122,14 @@ window.condOpen = function(cut) {
             '<div class="fi-row-sub">' + tag + '</div></div></div>';
         });
       }
+    }
+    if (_lastBriefing.spot_buoy && _lastBriefing.spot_buoy.latest) {
+      var sp = _lastBriefing.spot_buoy.latest;
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin:10px 0 6px;letter-spacing:0.5px;">WHOI SPOTTER — CHATHAM</div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Water Temp</span><span class="fi-row-value">' + (sp.sst_f != null ? sp.sst_f + 'F' : '--') + '</span></div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Waves</span><span class="fi-row-value">' + (sp.wave_height_ft != null ? sp.wave_height_ft + ' ft @ ' + sp.peak_period + 's' : '--') + '</span></div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Wave Dir</span><span class="fi-row-value">' + (sp.peak_direction != null ? Math.round(sp.peak_direction) + '°' : '--') + '</span></div>';
+      html += '<div class="fi-row"><span class="fi-row-label">Wind</span><span class="fi-row-value">' + (sp.wind_direction != null ? Math.round(sp.wind_direction) + '° at ' + sp.wind_speed_kt + ' kt' : '--') + '</span></div>';
     }
     if (_lastBriefing.buoy && _lastBriefing.buoy.observation) {
       var obs = _lastBriefing.buoy.observation;
