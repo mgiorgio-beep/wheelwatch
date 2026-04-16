@@ -329,7 +329,7 @@ def logout():
 @login_required
 def api_user_profile():
     db = get_db()
-    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified, is_admin FROM users WHERE id = ?',
+    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified, is_admin, first_name, last_name FROM users WHERE id = ?',
                       (session['user_id'],)).fetchone()
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -339,7 +339,31 @@ def api_user_profile():
         'phone_number': user['phone_number'],
         'phone_verified': bool(user['phone_verified']),
         'is_admin': bool(user['is_admin']),
+        'first_name': user['first_name'] or '',
+        'last_name': user['last_name'] or '',
     })
+
+@app.route('/api/user/change-password', methods=['POST'])
+@login_required
+def api_user_change_password():
+    current = request.form.get('current_password', '')
+    new_pw = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if not current or not new_pw:
+        return jsonify({'error': 'Current and new password required'}), 400
+    if len(new_pw) < 4:
+        return jsonify({'error': 'Password must be at least 4 characters'}), 400
+    if new_pw != confirm:
+        return jsonify({'error': 'New passwords don\'t match'}), 400
+    db = get_db()
+    user = db.execute('SELECT password_hash FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if not user or not check_password_hash(user['password_hash'], current):
+        return jsonify({'error': 'Current password is incorrect'}), 403
+    db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+               (generate_password_hash(new_pw), session['user_id']))
+    db.commit()
+    return jsonify({'ok': True})
+
 
 @app.route('/api/user/hide-welcome', methods=['POST'])
 @login_required

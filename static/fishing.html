@@ -534,6 +534,86 @@ body {
 .info-link:last-child { border-bottom: none; }
 .info-link svg { width: 20px; height: 20px; color: var(--text-muted); }
 
+/* ==================== ACCOUNT MENU ==================== */
+.acct-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  flex-shrink: 0; letter-spacing: 0.5px;
+  transition: box-shadow .15s;
+}
+.acct-avatar:active { box-shadow: 0 0 0 3px var(--accent-dim); }
+.acct-dropdown {
+  position: fixed; top: 52px; left: 12px;
+  background: var(--bg-card); border: 0.5px solid var(--border-light);
+  border-radius: 12px; min-width: 200px; padding: 6px 0;
+  z-index: 1600; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  opacity: 0; pointer-events: none; transform: translateY(-8px);
+  transition: opacity .15s, transform .15s;
+}
+.acct-dropdown.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.acct-dropdown-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; cursor: pointer; color: var(--text-primary);
+  font-size: 14px; border: none; background: none; width: 100%;
+  text-align: left; font-family: inherit;
+}
+.acct-dropdown-item:active { background: var(--bg-elevated); }
+.acct-dropdown-item svg { width: 18px; height: 18px; color: var(--text-muted); flex-shrink: 0; }
+.acct-dropdown-sep { height: 0.5px; background: var(--border-light); margin: 4px 0; }
+.acct-dropdown-overlay {
+  position: fixed; inset: 0; z-index: 1599;
+  display: none;
+}
+.acct-dropdown-overlay.open { display: block; }
+
+/* ==================== PROFILE PANEL ==================== */
+.profile-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1700; opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.profile-overlay.open { opacity: 1; pointer-events: auto; }
+.profile-panel {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--bg-card); border-radius: 14px 14px 0 0;
+  padding: 20px; max-height: 85vh; overflow-y: auto;
+  z-index: 1701; transform: translateY(100%);
+  transition: transform .3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.profile-overlay.open + .profile-panel { transform: translateY(0); }
+.profile-field {
+  margin-bottom: 16px;
+}
+.profile-field label {
+  display: block; font-size: 12px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.profile-field .profile-value {
+  font-size: 15px; color: var(--text-primary); padding: 10px 14px;
+  background: var(--bg-primary); border-radius: 10px;
+  border: 0.5px solid var(--border);
+}
+.profile-input {
+  width: 100%; background: var(--bg-primary); border: 0.5px solid var(--border);
+  border-radius: 10px; padding: 10px 14px; color: var(--text-primary);
+  font-size: 15px; font-family: inherit; box-sizing: border-box;
+}
+.profile-input:focus { outline: none; border-color: var(--accent); }
+.profile-btn {
+  width: 100%; padding: 12px; background: var(--accent); border: none;
+  border-radius: 10px; color: #fff; font-size: 15px; font-weight: 600;
+  cursor: pointer; font-family: inherit; margin-top: 4px;
+}
+.profile-btn:active { opacity: 0.85; }
+.profile-btn:disabled { opacity: 0.4; cursor: wait; }
+.profile-msg {
+  font-size: 13px; margin-top: 8px; padding: 8px 12px; border-radius: 8px;
+  display: none;
+}
+.profile-msg.error { display: block; color: var(--red); background: rgba(255,69,58,0.1); }
+.profile-msg.success { display: block; color: var(--green); background: rgba(48,209,88,0.1); }
+
 /* ==================== MISC ==================== */
 .divider {
   height: 0.5px; background: var(--border-light); margin: 16px 0;
@@ -547,7 +627,10 @@ body {
 
 <!-- ==================== HEADER ==================== -->
 <header class="wh-header">
-  <div class="wh-title">WHEEL<span>HOUSE</span></div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="acct-avatar" id="acct-avatar" onclick="acctToggle()"></div>
+    <div class="wh-title">WHEEL<span>HOUSE</span></div>
+  </div>
   <div class="wh-header-right">
     <div class="wh-ts" id="fi-ts"></div>
     <button class="wh-header-btn" id="fi-refresh-btn" onclick="fiLoad()">Refresh</button>
@@ -556,6 +639,62 @@ body {
     </button>
   </div>
 </header>
+
+<!-- ==================== ACCOUNT DROPDOWN ==================== -->
+<div class="acct-dropdown-overlay" id="acct-overlay" onclick="acctToggle()"></div>
+<div class="acct-dropdown" id="acct-dropdown">
+  <div style="padding:12px 16px 8px;font-size:13px;color:var(--text-muted);" id="acct-email"></div>
+  <div class="acct-dropdown-sep"></div>
+  <button class="acct-dropdown-item" onclick="acctToggle();profileOpen()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1c0-3.3 2.7-6 6-6h4c3.3 0 6 2.7 6 6v1"/></svg>
+    Profile Settings
+  </button>
+  <button class="acct-dropdown-item" onclick="window.location.href='/logout'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+    Log Out
+  </button>
+</div>
+
+<!-- ==================== PROFILE PANEL ==================== -->
+<div class="profile-overlay" id="profile-overlay" onclick="profileClose()"></div>
+<div class="profile-panel" id="profile-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div style="font-size:17px;font-weight:600;">Profile Settings</div>
+    <button class="wh-modal-close" onclick="profileClose()">&times;</button>
+  </div>
+  <div class="profile-field">
+    <label>Email</label>
+    <div class="profile-value" id="profile-email"></div>
+  </div>
+  <div class="profile-field">
+    <label>First Name</label>
+    <div class="profile-value" id="profile-first"></div>
+  </div>
+  <div class="profile-field">
+    <label>Last Name</label>
+    <div class="profile-value" id="profile-last"></div>
+  </div>
+  <div class="profile-field">
+    <label>Phone</label>
+    <div class="profile-value" id="profile-phone"></div>
+  </div>
+  <div style="height:0.5px;background:var(--border-light);margin:20px 0;"></div>
+  <div style="font-size:15px;font-weight:600;margin-bottom:14px;">Change Password</div>
+  <div class="profile-field">
+    <label>Current Password</label>
+    <input type="password" class="profile-input" id="pw-current" autocomplete="current-password">
+  </div>
+  <div class="profile-field">
+    <label>New Password</label>
+    <input type="password" class="profile-input" id="pw-new" autocomplete="new-password">
+  </div>
+  <div class="profile-field">
+    <label>Confirm New Password</label>
+    <input type="password" class="profile-input" id="pw-confirm" autocomplete="new-password">
+  </div>
+  <button class="profile-btn" id="pw-submit" onclick="changePassword()">Update Password</button>
+  <div class="profile-msg" id="pw-msg"></div>
+</div>
 
 <!-- ==================== TAB: DASHBOARD ==================== -->
 <div class="tab-panel active" id="tab-dashboard">
@@ -998,6 +1137,84 @@ window.infoToggle = function() {
   infoOpen = !infoOpen;
   document.getElementById('info-overlay').classList.toggle('open', infoOpen);
   document.getElementById('info-sheet').classList.toggle('open', infoOpen);
+};
+
+// ==================== ACCOUNT MENU ====================
+var acctOpen = false;
+var acctProfile = null;
+
+function acctInitials(profile) {
+  if (profile && profile.first_name) {
+    var f = profile.first_name.charAt(0).toUpperCase();
+    var l = (profile.last_name || '').charAt(0).toUpperCase();
+    return f + l;
+  }
+  if (profile && profile.username) return profile.username.charAt(0).toUpperCase();
+  return '?';
+}
+
+(async function loadAcctProfile() {
+  try {
+    var res = await fetch('/api/user/profile');
+    acctProfile = await res.json();
+    document.getElementById('acct-avatar').textContent = acctInitials(acctProfile);
+    document.getElementById('acct-email').textContent = acctProfile.username || '';
+  } catch(e) {}
+})();
+
+window.acctToggle = function() {
+  acctOpen = !acctOpen;
+  document.getElementById('acct-dropdown').classList.toggle('open', acctOpen);
+  document.getElementById('acct-overlay').classList.toggle('open', acctOpen);
+};
+
+window.profileOpen = function() {
+  if (!acctProfile) return;
+  document.getElementById('profile-email').textContent = acctProfile.username || '';
+  document.getElementById('profile-first').textContent = acctProfile.first_name || '-';
+  document.getElementById('profile-last').textContent = acctProfile.last_name || '-';
+  var phone = acctProfile.phone_number;
+  document.getElementById('profile-phone').textContent = phone ? phone + (acctProfile.phone_verified ? ' (verified)' : ' (unverified)') : 'Not registered';
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  var msg = document.getElementById('pw-msg');
+  msg.className = 'profile-msg'; msg.textContent = '';
+  document.getElementById('profile-overlay').classList.add('open');
+};
+
+window.profileClose = function() {
+  document.getElementById('profile-overlay').classList.remove('open');
+};
+
+window.changePassword = async function() {
+  var btn = document.getElementById('pw-submit');
+  var msg = document.getElementById('pw-msg');
+  var cur = document.getElementById('pw-current').value;
+  var np = document.getElementById('pw-new').value;
+  var conf = document.getElementById('pw-confirm').value;
+  if (!cur || !np) { msg.className = 'profile-msg error'; msg.textContent = 'Fill in all fields'; return; }
+  if (np !== conf) { msg.className = 'profile-msg error'; msg.textContent = 'New passwords don\'t match'; return; }
+  btn.disabled = true;
+  try {
+    var body = new FormData();
+    body.append('current_password', cur);
+    body.append('new_password', np);
+    body.append('confirm_password', conf);
+    var res = await fetch('/api/user/change-password', { method: 'POST', body: body });
+    var data = await res.json();
+    if (data.ok) {
+      msg.className = 'profile-msg success'; msg.textContent = 'Password updated';
+      document.getElementById('pw-current').value = '';
+      document.getElementById('pw-new').value = '';
+      document.getElementById('pw-confirm').value = '';
+    } else {
+      msg.className = 'profile-msg error'; msg.textContent = data.error || 'Failed';
+    }
+  } catch(e) {
+    msg.className = 'profile-msg error'; msg.textContent = 'Network error';
+  }
+  btn.disabled = false;
 };
 
 // ==================== HELPERS ====================
@@ -2682,8 +2899,13 @@ var currentGroupId = null;
 var currentGroupCode = null;
 var currentUsername = null;
 
-(async function() {
-  try { var res = await fetch('/api/user/profile'); var data = await res.json(); currentUsername = data.username; } catch(e) {}
+// Profile already loaded by acctInitials — reuse it
+(function() {
+  function waitForProfile() {
+    if (acctProfile) { currentUsername = acctProfile.username; return; }
+    setTimeout(waitForProfile, 100);
+  }
+  waitForProfile();
 })();
 
 window.showGroupTab = function(tab, btn) {
