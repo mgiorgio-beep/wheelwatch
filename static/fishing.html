@@ -436,16 +436,176 @@ body {
   padding: 12px; border-radius: 10px; margin-bottom: 12px;
   font-size: 14px; font-weight: 600; display: none;
 }
-.catch-voice-wrap {
-  text-align: center; margin-bottom: 20px; padding-bottom: 20px;
-  border-bottom: 0.5px solid var(--border-light);
+/* ==================== PHOTO CATCH FLOW ==================== */
+.photo-catch-wrap {
+  background: var(--bg-card); border-radius: 16px; padding: 16px;
+  margin-bottom: 14px; border: 1px solid var(--border-light);
 }
-.catch-voice-btn-main {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: var(--red); border: none; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: all .15s; touch-action: none; color: #fff;
-  box-shadow: 0 4px 16px rgba(255,69,58,0.3);
+.photo-catch-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.photo-catch-title {
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+.gps-dot {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-muted);
+}
+.gps-dot::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-muted); transition: background .2s;
+}
+.gps-dot.active::before { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.gps-dot.error::before { background: var(--red); }
+.photo-catch-btn {
+  width: 100%; min-height: 148px; padding: 20px; border: 2px dashed rgba(10,132,255,0.45);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(10,132,255,0.10), rgba(10,132,255,0.02));
+  color: var(--accent); font-weight: 700; font-size: 17px;
+  font-family: inherit; cursor: pointer; letter-spacing: 0.2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+.photo-catch-btn:active { transform: scale(0.98); border-color: var(--accent); background: rgba(10,132,255,0.18); }
+.photo-catch-btn:disabled { opacity: 0.5; }
+.photo-catch-btn svg { width: 44px; height: 44px; }
+.photo-catch-btn .sub { font-size: 12px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.1px; }
+.photo-catch-btn.secondary {
+  background: var(--bg-elevated); color: var(--text-primary);
+  border-style: solid; border-color: var(--border-light); min-height: 0; padding: 12px;
+  font-size: 14px; flex-direction: row;
+  margin-top: 8px; gap: 8px;
+}
+.photo-catch-btn.secondary svg { width: 18px; height: 18px; }
+.photo-catch-btn.secondary .sub { font-size: 11px; margin-left: 6px; }
+.photo-preview {
+  position: relative; margin-top: 10px; border-radius: 10px; overflow: hidden;
+}
+.photo-preview img { width: 100%; display: block; }
+.photo-preview-clear {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); color: #fff; border: none;
+  font-size: 16px; cursor: pointer; line-height: 1;
+}
+.photo-parsing {
+  text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;
+}
+.photo-parsing .dots { display: inline-block; animation: dots 1.4s infinite; }
+@keyframes dots { 0%,20% { content:'.';} 40% {content:'..';} 60%,100% {content:'...';} }
+.confidence-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px;
+  margin-left: 6px; vertical-align: middle;
+}
+.confidence-high { background: rgba(48,209,88,0.15); color: var(--green); }
+.confidence-medium { background: rgba(255,159,10,0.15); color: var(--orange); }
+.confidence-low { background: rgba(255,69,58,0.15); color: var(--red); }
+
+/* ==================== FEED (LANDING) ==================== */
+.feed-card {
+  background: var(--bg-card); border-radius: 14px; overflow: hidden;
+  margin-bottom: 12px; border: 1px solid var(--border-light);
+}
+.feed-card-photo {
+  width: 100%; display: block; background: var(--bg-primary);
+  max-height: 360px; object-fit: cover;
+}
+.feed-card-body { padding: 12px 14px; }
+.feed-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.feed-card-captain {
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
+}
+.feed-card-crew {
+  font-size: 11px; color: var(--text-muted); font-weight: 400;
+  letter-spacing: 0.3px;
+}
+.feed-card-body-text {
+  font-size: 14px; color: var(--text-primary); margin-top: 8px;
+  line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+}
+.feed-card-catch {
+  font-size: 15px; color: var(--text-primary); margin-top: 6px;
+  font-weight: 600;
+}
+.feed-card-meta {
+  font-size: 12px; color: var(--text-muted); margin-top: 6px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.feed-card-meta .dot { opacity: 0.5; }
+.feed-chip {
+  display: inline-block; padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  background: var(--accent-dim); color: var(--accent); text-transform: uppercase;
+}
+.feed-chip.public { background: rgba(48,209,88,0.15); color: var(--green); }
+.feed-chip.friends { background: rgba(10,132,255,0.15); color: var(--accent); }
+.feed-chip.catch { background: rgba(255,159,10,0.18); color: var(--orange); }
+.feed-card-del {
+  background: none; border: none; color: var(--text-muted); font-size: 11px;
+  cursor: pointer; font-family: inherit; padding: 4px 6px;
+}
+.feed-card-del:hover { color: var(--red); }
+.feed-empty {
+  text-align: center; padding: 40px 20px; color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Composer */
+.composer {
+  background: var(--bg-card); border-radius: 14px; padding: 12px;
+  margin-bottom: 14px; border: 1px solid var(--border-light);
+}
+.composer-textarea {
+  width: 100%; background: var(--bg-primary); border: 1px solid var(--border-light);
+  color: var(--text-primary); border-radius: 10px; padding: 10px 12px;
+  font-family: inherit; font-size: 14px; resize: vertical; min-height: 70px;
+  outline: none;
+}
+.composer-textarea:focus { border-color: var(--accent); }
+.composer-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-top: 10px; flex-wrap: wrap;
+}
+.composer-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.composer-btn {
+  background: var(--bg-elevated); border: 1px solid var(--border-light);
+  color: var(--text-primary); border-radius: 8px; padding: 8px 12px;
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.composer-btn:active { opacity: 0.85; }
+.composer-btn svg { width: 16px; height: 16px; }
+.composer-audience {
+  display: inline-flex; background: var(--bg-primary); border-radius: 8px;
+  padding: 3px; border: 1px solid var(--border-light);
+}
+.composer-audience button {
+  background: none; border: none; color: var(--text-muted);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 6px 10px; border-radius: 6px;
+}
+.composer-audience button.on { background: var(--accent); color: #fff; }
+.composer-post-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 9px 16px; font-family: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer; letter-spacing: 0.2px;
+}
+.composer-post-btn:disabled { opacity: 0.5; cursor: wait; }
+.composer-photo-preview {
+  position: relative; margin-top: 10px; border-radius: 10px; overflow: hidden;
+}
+.composer-photo-preview img { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+.composer-photo-clear {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); color: #fff; border: none;
+  font-size: 16px; cursor: pointer; line-height: 1;
 }
 
 /* ==================== SECTION HEADERS ==================== */
@@ -557,8 +717,42 @@ body {
   </div>
 </header>
 
+<!-- ==================== TAB: FEED (LANDING) ==================== -->
+<div class="tab-panel active" id="tab-feed">
+  <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>Feed</span>
+    <button onclick="loadFeed()" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Refresh</button>
+  </div>
+  <div class="composer">
+    <textarea id="post-body" class="composer-textarea" maxlength="2000"
+              placeholder="What's on the water? Share a catch, a condition, a tip..."></textarea>
+    <input type="file" id="post-photo-input" accept="image/*" style="display:none;"
+           onchange="postPhotoPicked(event)">
+    <div id="post-photo-preview"></div>
+    <div class="composer-row">
+      <div class="composer-left">
+        <button class="composer-btn" onclick="document.getElementById('post-photo-input').click()" aria-label="Add photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span>Photo</span>
+        </button>
+        <div class="composer-audience" role="tablist" aria-label="Who can see this post">
+          <button type="button" id="aud-friends" class="on" onclick="setPostAudience('friends')">Friends</button>
+          <button type="button" id="aud-public" onclick="setPostAudience('public')">Public</button>
+        </div>
+      </div>
+      <button class="composer-post-btn" id="post-submit-btn" onclick="createPost()">Post</button>
+    </div>
+  </div>
+  <div id="feed-list">
+    <div class="fi-loading"><div class="fi-spinner"></div> Loading feed...</div>
+  </div>
+</div>
+
 <!-- ==================== TAB: DASHBOARD ==================== -->
-<div class="tab-panel active" id="tab-dashboard">
+<div class="tab-panel" id="tab-dashboard">
   <div class="cond-cards" id="fi-sec-cuts">
     <div class="cond-card" onclick="condOpen('north')">
       <div class="cond-card-title"><span class="cond-card-dot" style="background:var(--accent)"></span>North Cut</div>
@@ -627,13 +821,35 @@ body {
   <div class="section-header">Log a Catch</div>
   <div id="catch-success-toast" class="catch-success-toast"></div>
   <div id="catch-body">
-    <div class="catch-voice-wrap">
-      <button id="catch-voice-btn" class="catch-voice-btn-main"
-        ontouchstart="catchVoiceStart(event)" ontouchend="catchVoiceStop()"
-        onmousedown="catchVoiceStart(event)" onmouseup="catchVoiceStop()">
-        <svg class="mic-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15a.998.998 0 00-.98-.85c-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08a6.993 6.993 0 005.91-5.78c.1-.6-.39-1.14-1-1.14z"/></svg>
+    <div class="photo-catch-wrap">
+      <div class="photo-catch-header">
+        <div class="photo-catch-title">Log from photo</div>
+        <div id="catch-gps-dot" class="gps-dot">GPS: locating</div>
+      </div>
+      <input type="file" id="catch-photo-input" accept="image/*"
+             style="display:none;" onchange="catchPhotoPicked(event, 'library')">
+      <input type="file" id="catch-photo-camera-input" accept="image/*" capture="environment"
+             style="display:none;" onchange="catchPhotoPicked(event, 'camera')">
+      <button class="photo-catch-btn" id="catch-photo-btn"
+              onclick="document.getElementById('catch-photo-camera-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Take photo of catch</span>
+        <span class="sub">Claude IDs species + estimates size</span>
       </button>
-      <div id="catch-voice-status" style="font-size:12px;color:var(--text-muted);margin-top:8px;">Hold to record your catch</div>
+      <button class="photo-catch-btn secondary" id="catch-photo-library-btn"
+              onclick="document.getElementById('catch-photo-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+        <span>Upload from library</span>
+        <span class="sub">Reads GPS from photo if available</span>
+      </button>
+      <div id="catch-photo-preview"></div>
     </div>
     <div class="catch-label">Spot</div>
     <div class="catch-chips" id="catch-spot-chips">
@@ -698,45 +914,66 @@ body {
 <div class="tab-panel" id="tab-crews">
   <div class="section-header">Crews</div>
 
-  <!-- Friend Groups -->
+  <!-- Your Crews -->
   <div class="fi-card" id="groups-section">
     <div class="fi-card-header">
-      <div class="fi-card-title" style="display:flex;align-items:center;gap:6px;">
-        Friend Groups
+      <div class="fi-card-title" style="display:flex;align-items:center;gap:8px;">
+        Your Crews
+        <span id="crew-count-badge" style="display:none;background:var(--bg-primary);color:var(--text-muted);font-size:11px;font-weight:600;border-radius:10px;padding:1px 8px;min-width:18px;text-align:center;">0</span>
         <span id="notif-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:18px;text-align:center;">0</span>
       </div>
     </div>
     <div class="fi-card-body">
-      <div class="gtab-bar">
-        <button class="gtab-btn active" id="gtab-btn-feed" onclick="showGroupTab('feed')">Feed</button>
-        <button class="gtab-btn" id="gtab-btn-groups" onclick="showGroupTab('groups')">My Groups</button>
-        <button class="gtab-btn" id="gtab-btn-create" onclick="showGroupTab('create')">New</button>
+      <!-- Primary actions -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button id="btn-show-create-crew" onclick="showCreateCrew()" style="flex:1;padding:11px 8px;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;">
+          <span style="font-size:15px;line-height:1;">+</span> New Crew
+        </button>
+        <button id="btn-show-join-crew" onclick="showJoinCrew()" style="flex:1;padding:11px 8px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-light);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">
+          Join with Code
+        </button>
       </div>
-      <div id="gtab-feed"><div id="groups-feed-list"><div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;font-style:italic;">Join or create a group to see shared catches.</div></div></div>
-      <div id="gtab-groups" style="display:none;">
-        <input id="join-code-input" class="catch-input" placeholder="Enter invite code..." maxlength="12" style="text-transform:uppercase;margin-bottom:8px;">
-        <button onclick="joinGroup()" style="width:100%;padding:10px;background:var(--bg-primary);border:none;color:var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">Join Group</button>
-        <div id="my-groups-list" style="margin-top:12px;"></div>
-      </div>
-      <div id="gtab-create" style="display:none;">
-        <input id="new-group-name" class="catch-input" placeholder="Group name (e.g. Chatham Fleet)" maxlength="30" style="margin-bottom:8px;">
-        <button onclick="createGroup()" style="width:100%;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">Create Group</button>
-        <div id="new-group-result" style="display:none;margin-top:14px;text-align:center;background:var(--bg-primary);border-radius:10px;padding:16px;">
+
+      <!-- Inline: Create form -->
+      <div id="create-crew-form" style="display:none;background:var(--bg-primary);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Start a new crew</div>
+          <button onclick="hideCreateCrew()" style="background:none;border:none;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer;padding:0 4px;">&times;</button>
+        </div>
+        <input id="new-group-name" class="catch-input" placeholder="Crew name (e.g. Chatham Fleet)" maxlength="30" style="margin-bottom:8px;" onkeydown="if(event.key==='Enter'){event.preventDefault();createGroup();}">
+        <button onclick="createGroup()" style="width:100%;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Create Crew</button>
+        <!-- Result after creation -->
+        <div id="new-group-result" style="display:none;margin-top:12px;text-align:center;background:var(--bg-card);border-radius:10px;padding:14px;">
           <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">INVITE CODE</div>
           <div id="invite-code-display" style="font-size:22px;font-weight:700;letter-spacing:4px;color:var(--accent);margin:8px 0;">---</div>
-          <div style="font-size:11px;color:var(--text-muted);">Share this with your crew</div>
-          <button onclick="copyInviteCode()" style="width:100%;margin-top:10px;padding:8px;background:var(--bg-card);border:none;color:var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">Copy Code</button>
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.5;">Send this link to crewmates. Tapping it auto-fills the code.</div>
+          <button onclick="shareInviteLink()" style="width:100%;margin-top:10px;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Share Invite Link</button>
+          <button onclick="copyInviteCode()" style="width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--border-light);color:var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">Copy Code Only</button>
         </div>
       </div>
+
+      <!-- Inline: Join form -->
+      <div id="join-crew-form" style="display:none;background:var(--bg-primary);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Enter invite code</div>
+          <button onclick="hideJoinCrew()" style="background:none;border:none;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer;padding:0 4px;">&times;</button>
+        </div>
+        <input id="join-code-input" class="catch-input" placeholder="e.g. CHATHAM66" maxlength="12" style="text-transform:uppercase;margin-bottom:8px;letter-spacing:2px;font-weight:600;" onkeydown="if(event.key==='Enter'){event.preventDefault();joinGroup();}">
+        <button onclick="joinGroup()" style="width:100%;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Join Crew</button>
+      </div>
+
+      <!-- Crews list (or empty state) -->
+      <div id="my-groups-list"></div>
     </div>
   </div>
 
-  <!-- Friend Finder -->
+  <!-- Crew Map entry card -->
   <div class="fi-card">
     <div class="fi-card-header">
-      <div class="fi-card-title">Friend Finder</div>
+      <div class="fi-card-title">Crew Map</div>
     </div>
     <div class="fi-card-body">
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:12px;">Share your live position with a crew and see who else is on the water.</div>
       <button onclick="showCrewMap()" style="width:100%;padding:12px;background:var(--accent-dim);border:none;color:var(--accent);border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;">Open Crew Map</button>
     </div>
   </div>
@@ -776,28 +1013,14 @@ body {
     </div>
   </div>
 
-  <!-- Phone Registration -->
-  <div class="fi-card" id="phone-section">
-    <div class="fi-card-header"><div class="fi-card-title">SMS Access</div></div>
+  <!-- Phone Registration (SMS — coming soon, disabled) -->
+  <div class="fi-card" id="phone-section" style="opacity:0.5;pointer-events:none;position:relative;">
+    <div class="fi-card-header">
+      <div class="fi-card-title">SMS Access</div>
+      <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">Coming Soon</div>
+    </div>
     <div class="fi-card-body">
-      <div id="phone-unregistered">
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">Register your phone to use Wheelhouse by text. Ask the advisor, log catches, and get group alerts.</p>
-        <input id="phone-input" type="tel" class="catch-input" placeholder="(508) 555-0123" autocomplete="tel">
-        <button onclick="sendVerificationCode()" style="width:100%;margin-top:8px;padding:12px;background:var(--accent);border:none;color:#fff;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;">Send Verification Code</button>
-      </div>
-      <div id="phone-verify-step" style="display:none;">
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Enter the 6-digit code sent to your phone.</p>
-        <input id="verify-code-input" type="number" class="catch-input" placeholder="123456" maxlength="6" style="font-size:20px;letter-spacing:4px;text-align:center;">
-        <button onclick="submitVerificationCode()" style="width:100%;margin-top:8px;padding:12px;background:var(--accent);border:none;color:#fff;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;">Verify</button>
-        <button onclick="showPhoneInput()" style="width:100%;margin-top:6px;background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;padding:8px;">Use a different number</button>
-      </div>
-      <div id="phone-verified" style="display:none;">
-        <div style="display:flex;align-items:center;gap:10px;background:var(--bg-primary);border-radius:8px;padding:12px;">
-          <div style="color:var(--green);font-size:18px;">&#10003;</div>
-          <div><div style="font-size:14px;font-weight:600;">SMS Active</div><div id="phone-display" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div></div>
-          <button onclick="removePhone()" style="margin-left:auto;background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;">Remove</button>
-        </div>
-      </div>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">Text-message access to the advisor is in the works. We'll turn this on once it's ready.</p>
     </div>
   </div>
 
@@ -868,22 +1091,39 @@ body {
 <div id="group-modal" class="wh-modal-overlay" onclick="closeGroupModal()">
   <div class="wh-modal-sheet" onclick="event.stopPropagation()">
     <div class="wh-modal-header">
-      <span id="modal-group-name" class="wh-modal-title">Group</span>
+      <span id="modal-group-name" class="wh-modal-title">Crew</span>
       <button class="wh-modal-close" onclick="closeGroupModal()">&times;</button>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;background:var(--bg-primary);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
-      <span style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">CODE</span>
-      <span id="modal-group-code" style="flex:1;font-size:16px;font-weight:700;letter-spacing:3px;color:var(--accent);">---</span>
-      <button onclick="copyModalCode()" style="font-size:10px;color:var(--accent);background:var(--bg-card);border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600;">Copy</button>
+
+    <!-- Invite card: prominent code + Share -->
+    <div style="background:var(--bg-primary);border-radius:12px;padding:14px;margin-bottom:14px;text-align:center;">
+      <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">INVITE CODE</div>
+      <div id="modal-group-code" style="font-size:22px;font-weight:700;letter-spacing:4px;color:var(--accent);margin:6px 0;">---</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="shareModalInvite()" style="flex:1;padding:10px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Share Invite Link</button>
+        <button onclick="copyModalCode()" style="flex:0 0 auto;padding:10px 14px;background:none;border:1px solid var(--border-light);color:var(--accent);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">Copy</button>
+      </div>
     </div>
+
+    <!-- Sharing toggle -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:0.5px solid var(--border-light);border-bottom:0.5px solid var(--border-light);margin-bottom:14px;">
-      <span style="font-size:14px;color:var(--text-secondary);">Share my catches</span>
+      <div>
+        <div style="font-size:14px;color:var(--text-primary);">Share my catches</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Crewmates will see your catches in their feed.</div>
+      </div>
       <label class="toggle-wrap"><input type="checkbox" class="toggle-input" id="modal-share-toggle" onchange="toggleSharing()"><span class="toggle-slider" id="share-slider"></span></label>
     </div>
-    <div style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:8px;">CREW</div>
+
+    <!-- Members -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;">CREW MEMBERS</div>
+      <span id="modal-member-count" style="font-size:11px;color:var(--text-muted);"></span>
+    </div>
     <div id="modal-members-list"></div>
+
+    <!-- Danger / admin -->
     <button id="transfer-captain-btn" onclick="transferCaptain()" style="width:100%;margin-top:14px;padding:12px;background:none;border:1px solid var(--border-light);color:var(--text-muted);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;display:none;">Transfer Captain Role</button>
-    <button onclick="leaveGroup()" style="width:100%;margin-top:10px;padding:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Leave Group</button>
+    <button onclick="leaveGroup()" style="width:100%;margin-top:10px;padding:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Leave Crew</button>
   </div>
 </div>
 
@@ -910,6 +1150,23 @@ body {
   </div>
 </div>
 
+<!-- ==================== CATCH DETAIL OVERLAY ==================== -->
+<div id="catch-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;">
+  <div style="position:fixed;top:5%;left:3%;right:3%;bottom:5%;background:var(--bg-card);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border-light);">
+      <div id="catch-detail-title" style="font-size:15px;font-weight:600;color:var(--text-primary);"></div>
+      <button onclick="closeCatchDetail()" class="wh-modal-close">&times;</button>
+    </div>
+    <div id="catch-detail-body" style="flex:1;overflow-y:auto;padding:16px;"></div>
+    <div style="padding:12px 16px;border-top:0.5px solid var(--border-light);display:flex;gap:8px;">
+      <button id="catch-detail-map-btn" onclick="catchDetailOpenMap()"
+              style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
+        Mark on Chart
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== INFO SHEET ==================== -->
 <div class="info-overlay" id="info-overlay" onclick="infoToggle()"></div>
 <div class="info-sheet" id="info-sheet">
@@ -932,7 +1189,11 @@ body {
 
 <!-- ==================== TAB BAR ==================== -->
 <nav class="tab-bar">
-  <button class="tab-item active" id="tab-btn-dashboard" onclick="switchTab('dashboard')">
+  <button class="tab-item active" id="tab-btn-feed" onclick="switchTab('feed')">
+    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+    <span>Feed</span>
+  </button>
+  <button class="tab-item" id="tab-btn-dashboard" onclick="switchTab('dashboard')">
     <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
     <span>Dashboard</span>
   </button>
@@ -959,10 +1220,10 @@ body {
 'use strict';
 
 // ==================== TAB SWITCHING ====================
-var activeTab = 'dashboard';
+var activeTab = 'feed';
 window.switchTab = function(tab) {
   activeTab = tab;
-  ['dashboard','tides','satellite','catch','crews'].forEach(function(t) {
+  ['feed','dashboard','tides','satellite','catch','crews'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     var btn = document.getElementById('tab-btn-' + t);
     if (panel) panel.classList.toggle('active', t === tab);
@@ -970,6 +1231,8 @@ window.switchTab = function(tab) {
   });
   window.scrollTo(0, 0);
   // Tab-specific actions
+  if (tab === 'feed' && typeof loadFeed === 'function') loadFeed();
+  if (tab === 'crews' && typeof loadMyGroups === 'function') loadMyGroups();
   if (tab === 'catch') {
     catchResetTimestamp();
     catchGetGps();
@@ -2262,8 +2525,8 @@ function renderCatchList(logs) {
 
     html += '<div class="catch-row" data-filename="' + (log.filename || '') + '" style="padding:12px 0;border-bottom:1px solid var(--border-light);position:relative;overflow:hidden;">' +
       '<div class="catch-row-inner" style="display:flex;align-items:center;gap:10px;transition:transform .2s;position:relative;">' +
-      (hasGps ? '<input type="checkbox" class="catch-check" data-idx="' + idx + '" onchange="catchCheckChanged()" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--accent);">' : '<div style="width:18px;"></div>') +
-      '<div style="flex:1;' + (hasGps ? 'cursor:pointer;' : '') + '"' + (hasGps ? ' onclick="openCatchMap(' + idx + ')"' : '') + '>' +
+      (hasGps ? '<input type="checkbox" class="catch-check" data-idx="' + idx + '" onchange="catchCheckChanged()" onclick="event.stopPropagation()" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--accent);">' : '<div style="width:18px;"></div>') +
+      '<div style="flex:1;cursor:pointer;" onclick="openCatchDetail(' + idx + ')">' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
       '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' + (log.spot || 'Unknown spot') + '</div>' +
       '<div style="font-size:11px;color:var(--text-muted);">' + (log.date || '') + '</div></div>';
@@ -2279,7 +2542,6 @@ function renderCatchList(logs) {
     if (conds.wind) condParts.push(conds.wind);
     if (conds.tide_phase) condParts.push(conds.tide_phase);
     if (condParts.length) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + condParts.join(' -- ') + '</div>';
-    if (hasGps) html += '<div style="font-size:10px;color:var(--accent);margin-top:2px;">Tap to view on chart</div>';
     if (log.logged_by) html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">by ' + log.logged_by + '</div>';
     html += '</div></div>' +
       '<div class="catch-delete-btn" style="position:absolute;right:0;top:0;bottom:0;width:70px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer;transform:translateX(70px);transition:transform .2s;" onclick="deleteCatch(this)">Delete</div>' +
@@ -2342,11 +2604,108 @@ window.openSelectedCatchMap = function() {
 };
 
 var catchMapInstance = null;
+var _catchDetailIdx = null;
 var redIcon = L.icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
+
+function _catchEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+window.openCatchDetail = function(idx) {
+  var log = _catchLogs[idx];
+  if (!log) return;
+  _catchDetailIdx = idx;
+
+  var title = log.spot || 'Catch';
+  if (log.species) title += ' · ' + log.species;
+  document.getElementById('catch-detail-title').textContent = title;
+
+  var hasGps = !!(log.gps && log.gps.lat && log.gps.lon);
+  var mapBtn = document.getElementById('catch-detail-map-btn');
+  if (mapBtn) {
+    mapBtn.disabled = !hasGps;
+    mapBtn.style.opacity = hasGps ? '1' : '0.4';
+    mapBtn.textContent = hasGps ? 'Mark on Chart' : 'No location recorded';
+  }
+
+  var conds = log.conditions || {};
+  var html = '';
+
+  if (log.photo_filename) {
+    html += '<div style="margin:-16px -16px 16px;">' +
+      '<img src="/catch-photos/' + _catchEsc(log.photo_filename) + '" alt="Catch photo" ' +
+      'style="width:100%;max-height:340px;object-fit:cover;display:block;"></div>';
+  }
+
+  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">' +
+    _catchEsc(log.date || '') + (log.logged_by ? ' · by ' + _catchEsc(log.logged_by) : '') +
+    '</div>';
+
+  var rows = [];
+  if (log.species) {
+    var sp = _catchEsc(log.species);
+    if (log.species_confidence) sp += ' <span style="color:var(--text-muted);font-size:11px;">(' + _catchEsc(log.species_confidence) + ')</span>';
+    rows.push(['Species', sp]);
+  }
+  if (log.size_inches != null && log.size_inches !== '') {
+    var sz = Math.round(log.size_inches) + '"';
+    if (log.size_confidence) sz += ' <span style="color:var(--text-muted);font-size:11px;">(' + _catchEsc(log.size_confidence) + ')</span>';
+    rows.push(['Size', sz]);
+  }
+  if (log.technique) rows.push(['Technique', _catchEsc(log.technique)]);
+  if (log.lure) rows.push(['Lure / Bait', _catchEsc(log.lure)]);
+
+  var loc = '';
+  if (log.spot) loc = _catchEsc(log.spot);
+  if (hasGps) {
+    loc += (loc ? ' · ' : '') + '<span style="font-family:monospace;font-size:12px;color:var(--text-muted);">' +
+      log.gps.lat.toFixed(5) + ', ' + log.gps.lon.toFixed(5) + '</span>';
+  } else {
+    loc += (loc ? ' ' : '') + '<span style="color:var(--text-muted);font-size:12px;">(no GPS)</span>';
+  }
+  rows.push(['Location', loc]);
+
+  if (conds.water_temp || conds.wind || conds.tide_phase) {
+    var parts = [conds.water_temp, conds.wind, conds.tide_phase].filter(Boolean).map(_catchEsc);
+    rows.push(['Conditions', parts.join(' · ')]);
+  }
+
+  html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+  rows.forEach(function(r) {
+    html += '<div style="display:flex;gap:12px;align-items:baseline;">' +
+      '<div style="min-width:92px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">' + r[0] + '</div>' +
+      '<div style="flex:1;font-size:14px;color:var(--text-primary);">' + r[1] + '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  if (log.notes) {
+    html += '<div style="margin-top:16px;padding:12px;background:var(--bg-elevated);border-radius:10px;' +
+      'font-size:13px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;">' +
+      _catchEsc(log.notes) + '</div>';
+  }
+
+  document.getElementById('catch-detail-body').innerHTML = html;
+  document.getElementById('catch-detail-overlay').style.display = 'block';
+};
+
+window.closeCatchDetail = function() {
+  document.getElementById('catch-detail-overlay').style.display = 'none';
+  _catchDetailIdx = null;
+};
+
+window.catchDetailOpenMap = function() {
+  if (_catchDetailIdx == null) return;
+  var idx = _catchDetailIdx;
+  closeCatchDetail();
+  openCatchMap(idx);
+};
 
 window.openCatchMap = function(idx) {
   var log = _catchLogs[idx];
@@ -2449,88 +2808,264 @@ window.deleteCatch = function(btn) {
     .catch(function() { btn.textContent = 'Error'; });
 };
 
-// ==================== CATCH VOICE RECORDING ====================
-var catchRecognition = null;
-var catchRecording = false;
-
-window.catchVoiceStart = function(e) {
-  e.preventDefault();
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { document.getElementById('catch-voice-status').textContent = 'Voice not supported'; return; }
-  catchRecording = true;
-  var btn = document.getElementById('catch-voice-btn');
-  btn.style.background = 'var(--red)';
-  btn.style.transform = 'scale(1.1)';
-  document.getElementById('catch-voice-status').textContent = 'Listening...';
-
-  catchRecognition = new SR();
-  catchRecognition.continuous = true; catchRecognition.interimResults = false; catchRecognition.lang = 'en-US';
-  catchRecognition.onresult = function(event) {
-    var transcript = '';
-    for (var i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
-    if (transcript.trim()) catchVoiceParse(transcript.trim());
-  };
-  catchRecognition.onerror = function(e) {
-    document.getElementById('catch-voice-status').textContent = 'Error: ' + e.error;
-    catchVoiceReset();
-  };
-  catchRecognition.onend = function() { if (catchRecording) catchVoiceReset(); };
-  catchRecognition.start();
-};
-
-window.catchVoiceStop = function() {
-  catchRecording = false;
-  if (catchRecognition) catchRecognition.stop();
-  catchVoiceReset();
-};
-
-function catchVoiceReset() {
-  var btn = document.getElementById('catch-voice-btn');
-  if (btn) { btn.style.background = 'var(--bg-primary)'; btn.style.transform = ''; }
-}
-
-function catchVoiceParse(text) {
-  document.getElementById('catch-voice-status').innerHTML = '<span style="color:var(--green);">Got it!</span> Parsing with AI...';
-  fetch('/api/fishing/parse-catch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({transcript:text}) })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.species) {
-      var sel = document.getElementById('catch-species');
-      var found = false;
-      for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].text === data.species) { sel.value = data.species; found = true; break; } }
-      if (!found && data.species) { var opt = document.createElement('option'); opt.text = data.species; opt.value = data.species; sel.add(opt); sel.value = data.species; }
-    }
-    if (data.technique) {
-      var tSel = document.getElementById('catch-technique');
-      var tFound = false;
-      for (var i = 0; i < tSel.options.length; i++) { if (tSel.options[i].text === data.technique) { tSel.value = data.technique; tFound = true; break; } }
-      if (!tFound) { var opt = document.createElement('option'); opt.text = data.technique; opt.value = data.technique; tSel.add(opt); tSel.value = data.technique; }
-    }
-    if (data.lure) {
-      document.getElementById('catch-lure').value = data.lure;
-      document.querySelectorAll('#catch-lure-chips .catch-chip').forEach(function(c) { c.classList.toggle('selected', c.textContent === data.lure); });
-    }
-    if (data.spot) {
-      document.getElementById('catch-spot').value = data.spot;
-      document.querySelectorAll('#catch-spot-chips .catch-chip').forEach(function(c) {
-        if (c.textContent.toLowerCase() === data.spot.toLowerCase()) c.classList.add('selected');
-        else c.classList.remove('selected');
-      });
-    }
-    if (data.notes) document.getElementById('catch-notes').value = data.notes;
-    document.getElementById('catch-voice-status').textContent = 'Hold to record again, or edit below';
-  })
-  .catch(function() {
-    document.getElementById('catch-notes').value = text;
-    document.getElementById('catch-voice-status').textContent = 'Couldn\'t parse -- added to notes';
-  });
-}
-
 // ==================== CATCH LOGGING ====================
 var catchGps = null;
+var catchPhotoFile = null;
+var catchPhotoExifGps = null;  // {lat, lon} read client-side from the picked file
+
+// Read JPEG EXIF GPS tags client-side. Handles only what we need: APP1/Exif,
+// TIFF header, IFD0 → GPSInfo pointer (0x8825), GPSLatitude/Longitude + refs.
+// Calls cb(lat, lon) — both null if not present/readable.
+function readExifGps(file, cb) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var view = new DataView(e.target.result);
+      if (view.getUint16(0) !== 0xFFD8) return cb(null, null);
+      var off = 2;
+      while (off < view.byteLength) {
+        var marker = view.getUint16(off); off += 2;
+        if (marker === 0xFFE1) {
+          if (view.getUint32(off + 2) !== 0x45786966) return cb(null, null);
+          var tiff = off + 8;
+          var little = view.getUint16(tiff) === 0x4949;
+          var g16 = function(p) { return view.getUint16(p, little); };
+          var g32 = function(p) { return view.getUint32(p, little); };
+          if (g16(tiff + 2) !== 0x002A) return cb(null, null);
+          var ifd0 = tiff + g32(tiff + 4);
+          var n = g16(ifd0), gpsIfd = 0;
+          for (var i = 0; i < n; i++) {
+            var entry = ifd0 + 2 + i * 12;
+            if (g16(entry) === 0x8825) { gpsIfd = tiff + g32(entry + 8); break; }
+          }
+          if (!gpsIfd) return cb(null, null);
+          var gn = g16(gpsIfd);
+          var latRef = null, lonRef = null, lat = null, lon = null;
+          var rat = function(p) { var num = g32(p), den = g32(p + 4); return den ? num / den : 0; };
+          for (var j = 0; j < gn; j++) {
+            var ge = gpsIfd + 2 + j * 12;
+            var tag = g16(ge);
+            var count = g32(ge + 4);
+            var valOff = g32(ge + 8);
+            if (tag === 1) latRef = String.fromCharCode(view.getUint8(ge + 8));
+            else if (tag === 2 && count === 3) {
+              var p = tiff + valOff;
+              lat = rat(p) + rat(p + 8) / 60 + rat(p + 16) / 3600;
+            } else if (tag === 3) lonRef = String.fromCharCode(view.getUint8(ge + 8));
+            else if (tag === 4 && count === 3) {
+              var p = tiff + valOff;
+              lon = rat(p) + rat(p + 8) / 60 + rat(p + 16) / 3600;
+            }
+          }
+          if (lat != null && lon != null) {
+            if (latRef === 'S') lat = -lat;
+            if (lonRef === 'W') lon = -lon;
+            return cb(lat, lon);
+          }
+          return cb(null, null);
+        } else {
+          off += view.getUint16(off);
+        }
+      }
+      cb(null, null);
+    } catch (err) { cb(null, null); }
+  };
+  reader.onerror = function() { cb(null, null); };
+  reader.readAsArrayBuffer(file.slice(0, 256 * 1024));  // EXIF is near the start
+}
+
+// Downscale to maxDim on the long edge and re-encode as JPEG. Strips EXIF — read GPS first.
+function compressImage(file, maxDim, quality, cb) {
+  if (file.size <= 900 * 1024) return cb(file);  // already small, keep original (preserves EXIF)
+  var img = new Image();
+  var url = URL.createObjectURL(file);
+  img.onload = function() {
+    URL.revokeObjectURL(url);
+    var w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    canvas.toBlob(function(blob) {
+      if (!blob) return cb(file);
+      try {
+        cb(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+      } catch (e) {
+        // Safari polyfill for File constructor
+        blob.name = file.name || 'photo.jpg';
+        cb(blob);
+      }
+    }, 'image/jpeg', quality);
+  };
+  img.onerror = function() { URL.revokeObjectURL(url); cb(file); };
+  img.src = url;
+}
 
 window.catchToggle = function() {
   switchTab('catch');
+};
+
+function catchSetGpsDot(state, text) {
+  var dot = document.getElementById('catch-gps-dot');
+  if (!dot) return;
+  dot.classList.remove('active', 'error');
+  if (state) dot.classList.add(state);
+  dot.textContent = text;
+}
+
+function catchConfidenceBadge(level) {
+  if (!level) return '';
+  var cls = level === 'high' ? 'confidence-high' : level === 'medium' ? 'confidence-medium' : 'confidence-low';
+  return '<span class="confidence-badge ' + cls + '">' + level.toUpperCase() + '</span>';
+}
+
+window.catchPhotoPicked = function(evt, source) {
+  var rawFile = evt.target.files && evt.target.files[0];
+  if (!rawFile) return;
+  catchPhotoExifGps = null;
+  var isLibrary = source === 'library';
+  var previewUrl = URL.createObjectURL(rawFile);
+  var preview = document.getElementById('catch-photo-preview');
+  preview.innerHTML =
+    '<div class="photo-preview">' +
+      '<img src="' + previewUrl + '" alt="Catch photo">' +
+      '<button class="photo-preview-clear" onclick="catchPhotoClear()" aria-label="Remove photo">&times;</button>' +
+    '</div>' +
+    '<div class="photo-parsing" id="catch-photo-parsing">Identifying fish<span class="dots">...</span></div>';
+
+  // Lock Save until Claude finishes — otherwise a fast tap saves an empty catch.
+  var saveBtn = document.getElementById('catch-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Identifying...'; }
+
+  readExifGps(rawFile, function(exLat, exLon) {
+    var gpsStatus = document.getElementById('catch-gps-status');
+    if (exLat != null && exLon != null) {
+      catchPhotoExifGps = { lat: exLat, lon: exLon };
+      // EXIF wins: a photo records the spot it was actually taken.
+      catchGps = { lat: exLat, lon: exLon };
+      if (gpsStatus) {
+        gpsStatus.innerHTML = '<span style="color:var(--green);">' +
+          exLat.toFixed(4) + ', ' + exLon.toFixed(4) +
+          '</span> <span style="color:var(--text-muted);font-size:11px;">(from photo)</span>';
+      }
+      catchSetGpsDot('active', 'GPS: from photo');
+    } else if (isLibrary) {
+      // Library upload with no EXIF GPS: iOS Safari often strips location from photos
+      // picked via <input type="file">. Don't lie with device GPS — require manual spot.
+      catchGps = null;
+      if (gpsStatus) {
+        gpsStatus.innerHTML = '<span style="color:var(--orange);">No location in photo</span> ' +
+          '<span style="color:var(--text-muted);font-size:11px;">— pick a spot below</span>';
+      }
+      catchSetGpsDot('error', 'GPS: none');
+    }
+    // camera source with no EXIF: keep whatever catchGetGps already put into catchGps
+    compressImage(rawFile, 1600, 0.85, function(processed) {
+      catchPhotoFile = processed;
+      var fd = new FormData();
+      fd.append('photo', processed, processed.name || 'photo.jpg');
+      if (catchPhotoExifGps) {
+        fd.append('exif_lat', catchPhotoExifGps.lat);
+        fd.append('exif_lon', catchPhotoExifGps.lon);
+      }
+      catchParsePhoto(fd);
+    });
+  });
+};
+
+function catchParsePhoto(fd) {
+  var reenableSave = function() {
+    var sb = document.getElementById('catch-save-btn');
+    if (sb) { sb.disabled = false; sb.textContent = 'Save Catch'; }
+  };
+  fetch('/parse-catch-photo', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var parsing = document.getElementById('catch-photo-parsing');
+      if (!parsing) { reenableSave(); return; }
+      if (data.error) {
+        parsing.innerHTML = '<span style="color:var(--orange);">' + data.error + '</span>';
+        reenableSave();
+        return;
+      }
+      // Fill form fields
+      var speciesSel = document.getElementById('catch-species');
+      if (data.species) {
+        var matched = false;
+        for (var i = 0; i < speciesSel.options.length; i++) {
+          if (speciesSel.options[i].value === data.species) { speciesSel.selectedIndex = i; matched = true; break; }
+        }
+        if (!matched) {
+          var opt = document.createElement('option');
+          opt.value = data.species; opt.textContent = data.species; opt.selected = true;
+          speciesSel.appendChild(opt);
+        }
+      }
+      // Notes: prepend size + Claude note, preserve any existing notes
+      var notesEl = document.getElementById('catch-notes');
+      var autoBits = [];
+      if (data.size_inches) autoBits.push(Math.round(data.size_inches) + '"');
+      if (data.notes) autoBits.push(data.notes);
+      if (autoBits.length) {
+        var existing = notesEl.value.trim();
+        notesEl.value = autoBits.join(' — ') + (existing ? '\n' + existing : '');
+      }
+      // Stash values on the form for submission
+      catchPhotoFile._wh_size_inches = data.size_inches;
+      catchPhotoFile._wh_species_confidence = data.species_confidence;
+      catchPhotoFile._wh_size_confidence = data.size_confidence;
+
+      // Fallback to EXIF GPS if the browser never got a live fix (typical for library
+      // uploads after the fact). Prefer the client-side read (survives compression).
+      var gpsFromPhoto = false;
+      var exifLat = catchPhotoExifGps ? catchPhotoExifGps.lat : data.exif_lat;
+      var exifLon = catchPhotoExifGps ? catchPhotoExifGps.lon : data.exif_lon;
+      if (!catchGps && exifLat != null && exifLon != null) {
+        catchGps = { lat: exifLat, lon: exifLon };
+        gpsFromPhoto = true;
+        var gpsStatus = document.getElementById('catch-gps-status');
+        if (gpsStatus) {
+          gpsStatus.innerHTML = '<span style="color:var(--green);">' +
+            catchGps.lat.toFixed(4) + ', ' + catchGps.lon.toFixed(4) +
+            '</span> <span style="color:var(--text-muted);font-size:11px;">(from photo)</span>';
+        }
+        catchSetGpsDot('active', 'GPS: from photo');
+        if (data.exif_area_name) {
+          var spotInput = document.getElementById('catch-spot');
+          if (spotInput && !spotInput.value) spotInput.value = data.exif_area_name;
+        }
+      }
+
+      var summary = data.species || 'Fish';
+      if (data.size_inches) summary += ' — ' + Math.round(data.size_inches) + '"';
+      var gpsTag = gpsFromPhoto ? ' <span style="color:var(--green);font-size:11px;">📍 ' +
+        (data.exif_area_name || 'from photo') + '</span>' : '';
+      parsing.innerHTML = '<div style="color:var(--text-primary);font-weight:600;">' + summary +
+        catchConfidenceBadge(data.species_confidence) + gpsTag +
+        '</div><div style="font-size:11px;margin-top:4px;color:var(--text-muted);">Edit anything below, then tap Save Catch.</div>';
+      reenableSave();
+    })
+    .catch(function() {
+      var parsing = document.getElementById('catch-photo-parsing');
+      if (parsing) parsing.innerHTML = '<span style="color:var(--red);">Could not reach the identifier. You can still save the catch.</span>';
+      reenableSave();
+    });
+}
+
+window.catchPhotoClear = function() {
+  catchPhotoFile = null;
+  catchPhotoExifGps = null;
+  var preview = document.getElementById('catch-photo-preview');
+  if (preview) preview.innerHTML = '';
+  var input = document.getElementById('catch-photo-input');
+  if (input) input.value = '';
+  var camInput = document.getElementById('catch-photo-camera-input');
+  if (camInput) camInput.value = '';
+  var sb = document.getElementById('catch-save-btn');
+  if (sb) { sb.disabled = false; sb.textContent = 'Save Catch'; }
 };
 
 window.catchResetTimestamp = function() {
@@ -2548,14 +3083,15 @@ function catchResetForm() {
   document.getElementById('catch-save-btn').disabled = false;
   document.getElementById('catch-save-btn').textContent = 'Log Catch';
   catchGps = null;
+  catchPhotoClear();
+  catchSetGpsDot('', 'GPS: locating');
   document.querySelectorAll('.catch-chip').forEach(function(c) { c.classList.remove('selected'); });
-  var status = document.getElementById('catch-voice-status');
-  if (status) status.textContent = 'Hold to record';
 }
 
 function catchGetGps() {
   if (!navigator.geolocation) {
     document.getElementById('catch-gps-status').innerHTML = 'GPS not available';
+    catchSetGpsDot('error', 'GPS: unavailable');
     return;
   }
   navigator.geolocation.getCurrentPosition(
@@ -2563,8 +3099,12 @@ function catchGetGps() {
       catchGps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       document.getElementById('catch-gps-status').innerHTML =
         '<span style="color:var(--green);">' + catchGps.lat.toFixed(4) + ', ' + catchGps.lon.toFixed(4) + '</span>';
+      catchSetGpsDot('active', 'GPS: locked');
     },
-    function() { document.getElementById('catch-gps-status').innerHTML = 'GPS unavailable -- catch will save without location'; },
+    function() {
+      document.getElementById('catch-gps-status').innerHTML = 'GPS unavailable -- catch will save without location';
+      catchSetGpsDot('error', 'GPS: off');
+    },
     { enableHighAccuracy: true, timeout: 10000 }
   );
 }
@@ -2583,9 +3123,44 @@ window.catchPickLure = function(btn) {
 
 window.catchSave = function() {
   var spot = document.getElementById('catch-spot').value.trim();
-  if (!spot) {
+  // Spot is required only when there's no photo (photo path derives area from GPS).
+  if (!spot && !catchPhotoFile) {
     document.getElementById('catch-spot').style.borderColor = 'var(--red)';
     setTimeout(function() { document.getElementById('catch-spot').style.borderColor = ''; }, 2000);
+    return;
+  }
+
+  var btn = document.getElementById('catch-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  var onOk = function() {
+    btn.textContent = 'Logged!'; btn.style.background = 'var(--green)';
+    _catchLogs = [];
+    setTimeout(function() {
+      catchResetForm();
+      btn.style.background = '';
+      loadCatchHistory();
+      if (typeof loadFeed === 'function') { try { loadFeed(); } catch(e) {} }
+    }, 1500);
+  };
+  var onErr = function() { btn.textContent = 'Error -- Try Again'; btn.disabled = false; };
+
+  if (catchPhotoFile) {
+    var fd = new FormData();
+    fd.append('photo', catchPhotoFile);
+    fd.append('spot', spot);
+    fd.append('species', document.getElementById('catch-species').value);
+    fd.append('technique', document.getElementById('catch-technique').value);
+    fd.append('lure', document.getElementById('catch-lure').value.trim());
+    fd.append('notes', document.getElementById('catch-notes').value.trim());
+    if (catchGps) { fd.append('lat', catchGps.lat); fd.append('lon', catchGps.lon); }
+    if (catchPhotoFile._wh_size_inches != null) fd.append('size_inches', catchPhotoFile._wh_size_inches);
+    if (catchPhotoFile._wh_species_confidence) fd.append('species_confidence', catchPhotoFile._wh_species_confidence);
+    if (catchPhotoFile._wh_size_confidence) fd.append('size_confidence', catchPhotoFile._wh_size_confidence);
+    fetch('/log-catch-photo', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.error) onErr(); else onOk(); })
+      .catch(onErr);
     return;
   }
 
@@ -2597,23 +3172,10 @@ window.catchSave = function() {
     notes: document.getElementById('catch-notes').value.trim(),
     gps: catchGps
   };
-
-  var btn = document.getElementById('catch-save-btn');
-  btn.disabled = true; btn.textContent = 'Saving...';
-
   fetch('/api/fishing/log', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.error) { btn.textContent = 'Error -- Try Again'; btn.disabled = false; return; }
-    btn.textContent = 'Logged!'; btn.style.background = 'var(--green)';
-    _catchLogs = [];
-    setTimeout(function() {
-      catchResetForm();
-      btn.style.background = '';
-      loadCatchHistory();
-    }, 1500);
-  })
-  .catch(function() { btn.textContent = 'Error -- Try Again'; btn.disabled = false; });
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.error) onErr(); else onOk(); })
+    .catch(onErr);
 };
 
 // Redraw charts on resize
@@ -2676,8 +3238,174 @@ window.removePhone = async function() {
   showPhoneInput();
 };
 
-// ==================== FRIEND GROUPS ====================
-var activeGroupTab = 'feed';
+// ==================== SOCIAL FEED (LANDING) ====================
+var postPhotoFile = null;
+var postAudience = 'friends';
+
+function feedEscHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+window.setPostAudience = function(a) {
+  postAudience = (a === 'public') ? 'public' : 'friends';
+  var f = document.getElementById('aud-friends');
+  var p = document.getElementById('aud-public');
+  if (f) f.classList.toggle('on', postAudience === 'friends');
+  if (p) p.classList.toggle('on', postAudience === 'public');
+};
+
+window.postPhotoPicked = function(evt) {
+  var raw = evt.target.files && evt.target.files[0];
+  if (!raw) return;
+  var url = URL.createObjectURL(raw);
+  var preview = document.getElementById('post-photo-preview');
+  if (preview) {
+    preview.innerHTML =
+      '<div class="composer-photo-preview">' +
+        '<img src="' + url + '" alt="Post photo">' +
+        '<button class="composer-photo-clear" onclick="postPhotoClear()" aria-label="Remove photo">&times;</button>' +
+      '</div>';
+  }
+  if (typeof compressImage === 'function') {
+    compressImage(raw, 1600, 0.85, function(processed) { postPhotoFile = processed; });
+  } else {
+    postPhotoFile = raw;
+  }
+};
+
+window.postPhotoClear = function() {
+  postPhotoFile = null;
+  var preview = document.getElementById('post-photo-preview');
+  if (preview) preview.innerHTML = '';
+  var input = document.getElementById('post-photo-input');
+  if (input) input.value = '';
+};
+
+window.createPost = function() {
+  var body = document.getElementById('post-body').value.trim();
+  if (!body && !postPhotoFile) {
+    document.getElementById('post-body').style.borderColor = 'var(--red)';
+    setTimeout(function() { document.getElementById('post-body').style.borderColor = ''; }, 1500);
+    return;
+  }
+  var btn = document.getElementById('post-submit-btn');
+  btn.disabled = true; btn.textContent = 'Posting...';
+
+  var done = function(ok) {
+    btn.disabled = false; btn.textContent = 'Post';
+    if (ok) {
+      document.getElementById('post-body').value = '';
+      postPhotoClear();
+      loadFeed();
+    } else {
+      btn.textContent = 'Try Again';
+    }
+  };
+
+  var finish = function(lat, lon) {
+    var fd = new FormData();
+    fd.append('body', body);
+    fd.append('visibility', postAudience);
+    if (postPhotoFile) fd.append('photo', postPhotoFile);
+    if (lat != null && lon != null) { fd.append('lat', lat); fd.append('lon', lon); }
+    fetch('/api/post', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { done(!d.error); })
+      .catch(function() { done(false); });
+  };
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { finish(pos.coords.latitude, pos.coords.longitude); },
+      function() { finish(null, null); },
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 }
+    );
+  } else {
+    finish(null, null);
+  }
+};
+
+window.deletePost = function(id) {
+  if (!confirm('Delete this post?')) return;
+  fetch('/api/post/' + id, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.deleted) loadFeed(); });
+};
+
+window.loadFeed = function() {
+  var el = document.getElementById('feed-list');
+  if (!el) return;
+  fetch('/api/feed')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var items = (data && data.items) || [];
+      if (!items.length) {
+        el.innerHTML = '<div class="feed-empty">Nothing yet. Start the fleet off — write a post or log a catch.</div>';
+        return;
+      }
+      el.innerHTML = items.map(renderFeedItem).join('');
+    })
+    .catch(function() {
+      el.innerHTML = '<div class="feed-empty">Could not load the feed.</div>';
+    });
+};
+
+function renderFeedItem(it) {
+  var captain = feedEscHtml(it.captain || '');
+  var selfTag = it.is_self ? ' <span style="color:var(--text-muted);font-weight:400;font-size:11px;">(you)</span>' : '';
+  var meta = [];
+  if (it.area) meta.push(feedEscHtml(it.area));
+  if (it.type === 'catch' && it.crew) meta.push(feedEscHtml(it.crew));
+  if (it.time_ago) meta.push(feedEscHtml(it.time_ago));
+  var metaHtml = meta.join(' <span class="dot">&middot;</span> ');
+
+  var chip = '';
+  if (it.type === 'catch') chip = '<span class="feed-chip catch">Catch</span>';
+  else if (it.visibility === 'public') chip = '<span class="feed-chip public">Public</span>';
+  else chip = '<span class="feed-chip friends">Friends</span>';
+
+  var photoHtml = '';
+  if (it.type === 'catch' && it.photo_filename) {
+    photoHtml = '<img class="feed-card-photo" loading="lazy" alt="Catch photo" src="/catch-photos/' + encodeURIComponent(it.photo_filename) + '">';
+  } else if (it.type === 'post' && it.photo_filename) {
+    photoHtml = '<img class="feed-card-photo" loading="lazy" alt="Post photo" src="/post-photos/' + encodeURIComponent(it.photo_filename) + '">';
+  }
+
+  var bodyHtml = '';
+  if (it.type === 'catch') {
+    var size = it.size_inches ? (Math.round(it.size_inches) + '" ') : '';
+    var catchLine = (size + feedEscHtml(it.species || 'Catch')).trim();
+    bodyHtml = '<div class="feed-card-catch">' + catchLine + '</div>';
+  } else if (it.body) {
+    bodyHtml = '<div class="feed-card-body-text">' + feedEscHtml(it.body) + '</div>';
+  }
+
+  var delBtn = (it.type === 'post' && it.is_self)
+    ? '<button class="feed-card-del" onclick="deletePost(' + it.id + ')">Delete</button>' : '';
+
+  return '<div class="feed-card">' +
+    photoHtml +
+    '<div class="feed-card-body">' +
+      '<div class="feed-card-head">' +
+        '<span class="feed-card-captain">' + captain + selfTag + '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px;">' + chip + delBtn + '</span>' +
+      '</div>' +
+      bodyHtml +
+      (metaHtml ? '<div class="feed-card-meta">' + metaHtml + '</div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+// Kick off feed load on first paint since Feed is the landing tab.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { loadFeed(); });
+} else {
+  loadFeed();
+}
+
+// ==================== CREWS (was Friend Groups) ====================
 var currentGroupId = null;
 var currentGroupCode = null;
 var currentUsername = null;
@@ -2686,61 +3414,95 @@ var currentUsername = null;
   try { var res = await fetch('/api/user/profile'); var data = await res.json(); currentUsername = data.username; } catch(e) {}
 })();
 
-window.showGroupTab = function(tab, btn) {
-  activeGroupTab = tab;
-  ['feed','groups','create'].forEach(function(t) {
-    var el = document.getElementById('gtab-'+t);
-    if (el) el.style.display = t===tab?'block':'none';
-    var b = document.getElementById('gtab-btn-'+t);
-    if (b) { b.style.background = t===tab?'var(--accent)':'transparent'; b.style.color = t===tab?'#fff':'var(--text-muted)'; }
-  });
-  if (tab==='feed') loadGroupFeed();
-  if (tab==='groups') loadMyGroups();
-  if (tab==='create') { var r = document.getElementById('new-group-result'); if(r) r.style.display='none'; var n = document.getElementById('new-group-name'); if(n) n.value=''; }
-};
-
-async function loadGroupFeed() {
-  var el = document.getElementById('groups-feed-list');
-  if (!el) return;
-  try {
-    var res = await fetch('/api/groups');
-    var data = await res.json();
-    var groups = data.groups || [];
-    if (!groups.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;font-style:italic;">Join or create a group to see shared catches.</div>'; return; }
-    var allCatches = [];
-    for (var i=0; i<groups.length; i++) {
-      try { var cr = await fetch('/api/groups/'+groups[i].id+'/catches'); var cd = await cr.json(); (cd.catches||[]).forEach(function(c) { c._group = groups[i].name; allCatches.push(c); }); } catch(e) {}
-    }
-    if (!allCatches.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;">No shared catches yet.</div>'; return; }
-    el.innerHTML = allCatches.slice(0,30).map(function(c) {
-      var gpsHtml = c.gps && c.gps.lat
-        ? '<a href="https://maps.apple.com/?ll='+c.gps.lat+','+c.gps.lon+'&q=Catch+Location" style="display:inline-block;margin-top:5px;color:var(--accent);font-size:12px;text-decoration:none;">View on map</a>'
-        : '';
-      return '<div style="border-left:2px solid var(--accent);padding:8px 12px;margin-bottom:6px;background:var(--bg-primary);border-radius:0 6px 6px 0;">'+
-        '<div style="font-size:11px;color:var(--accent);font-weight:700;">'+c.captain+' <span style="color:var(--text-muted);font-weight:400;">&middot; '+c._group+'</span></div>'+
-        '<div style="font-size:13px;color:var(--text-primary);margin-top:2px;">'+(c.species||'--')+(c.technique?' &middot; '+c.technique:'')+(c.lure?' &middot; '+c.lure:'')+'</div>'+
-        (c.spot?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+c.spot+'</div>':'')+
-        gpsHtml+
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+c.date+'</div></div>';
-    }).join('');
-  } catch(e) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">Could not load feed.</div>'; }
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+function _crewInitials(name) {
+  var parts = String(name || '').trim().split(/\s+/).slice(0, 2);
+  var letters = parts.map(function(w){ return (w[0] || '').toUpperCase(); }).join('');
+  return letters || '•';
+}
+
+window.showCreateCrew = function() {
+  var form = document.getElementById('create-crew-form');
+  if (!form) return;
+  form.style.display = 'block';
+  var j = document.getElementById('join-crew-form'); if (j) j.style.display = 'none';
+  var r = document.getElementById('new-group-result'); if (r) r.style.display = 'none';
+  var n = document.getElementById('new-group-name');
+  if (n) { n.value = ''; setTimeout(function(){ n.focus(); }, 50); }
+};
+window.hideCreateCrew = function() {
+  var form = document.getElementById('create-crew-form');
+  if (form) form.style.display = 'none';
+};
+window.showJoinCrew = function() {
+  var form = document.getElementById('join-crew-form');
+  if (!form) return;
+  form.style.display = 'block';
+  var c = document.getElementById('create-crew-form'); if (c) c.style.display = 'none';
+  var i = document.getElementById('join-code-input');
+  if (i) { setTimeout(function(){ i.focus(); }, 50); }
+};
+window.hideJoinCrew = function() {
+  var form = document.getElementById('join-crew-form');
+  if (form) form.style.display = 'none';
+};
 
 async function loadMyGroups() {
   var el = document.getElementById('my-groups-list');
+  var countEl = document.getElementById('crew-count-badge');
   if (!el) return;
   try {
     var res = await fetch('/api/groups');
     var data = await res.json();
     var groups = data.groups || [];
-    if (!groups.length) { el.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;font-style:italic;">No groups yet.</div>'; return; }
+    if (countEl) {
+      countEl.textContent = groups.length;
+      countEl.style.display = groups.length ? 'inline-block' : 'none';
+    }
+    if (!groups.length) {
+      el.innerHTML =
+        '<div style="text-align:center;padding:28px 16px;background:var(--bg-primary);border-radius:12px;border:1px dashed var(--border-light);">' +
+          '<div style="font-size:32px;margin-bottom:6px;">⚓</div>' +
+          '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">No crews yet</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">Start a crew with your fleet, or join one with an invite code.</div>' +
+        '</div>';
+      return;
+    }
     el.innerHTML = groups.map(function(g) {
-      return '<div style="background:var(--bg-primary);border:1px solid var(--border-light);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;" onclick="openGroupModal('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\',\''+g.code+'\','+g.share_my_catches+',\''+g.role+'\')">'+
-        '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">'+g.name+'</div>'+
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">'+(g.share_my_catches?'Sharing':'Not sharing')+' &middot; '+g.member_count+' member'+(g.member_count!==1?'s':'')+' &middot; '+(g.role==='captain'?'Captain':'Member')+'</div>'+
-        '<div style="display:inline-block;background:var(--accent);color:#fff;font-size:10px;font-weight:700;letter-spacing:2px;padding:2px 8px;border-radius:4px;margin-top:6px;">'+g.code+'</div></div>';
+      var initials = _crewInitials(g.name);
+      var memberTxt = g.member_count + ' member' + (g.member_count !== 1 ? 's' : '');
+      var rolePill = g.role === 'captain'
+        ? '<span style="background:var(--accent);color:#fff;font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:4px;">CAPTAIN</span>'
+        : '';
+      var sharingPill = g.share_my_catches
+        ? '<span style="color:#34c759;font-size:11px;font-weight:600;">● Sharing</span>'
+        : '<span style="color:var(--text-muted);font-size:11px;">○ Not sharing</span>';
+      var safeName = g.name.replace(/'/g, "\\'");
+      return '<div role="button" onclick="openGroupModal(' + g.id + ',\'' + safeName + '\',\'' + g.code + '\',' + g.share_my_catches + ',\'' + g.role + '\')" ' +
+          'style="display:flex;align-items:center;gap:12px;background:var(--bg-primary);border:1px solid var(--border-light);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;">' +
+        '<div style="flex:0 0 40px;width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;letter-spacing:0.5px;">' + escHtml(initials) + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
+            '<div style="font-size:15px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(g.name) + '</div>' +
+            rolePill +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);">' +
+            '<span>' + memberTxt + '</span>' +
+            '<span>·</span>' +
+            sharingPill +
+          '</div>' +
+        '</div>' +
+        '<div style="flex:0 0 auto;color:var(--text-muted);font-size:20px;line-height:1;">›</div>' +
+      '</div>';
     }).join('');
-  } catch(e) { el.innerHTML='<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load groups.</div>'; }
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">Could not load crews.</div>';
+  }
 }
 
 window.createGroup = async function() {
@@ -2754,7 +3516,8 @@ window.createGroup = async function() {
     document.getElementById('invite-code-display').textContent = data.code;
     document.getElementById('new-group-result').style.display = 'block';
     document.getElementById('new-group-name').value = '';
-  } catch(e) { alert('Could not create group.'); }
+    loadMyGroups();
+  } catch(e) { alert('Could not create crew.'); }
 };
 
 window.joinGroup = async function() {
@@ -2765,9 +3528,10 @@ window.joinGroup = async function() {
     var data = await res.json();
     if (data.error) { alert(data.error); return; }
     document.getElementById('join-code-input').value = '';
-    alert('Joined "'+data.name+'"!');
-    showGroupTab('groups');
-  } catch(e) { alert('Could not join group.'); }
+    hideJoinCrew();
+    alert('Joined "' + data.name + '"!');
+    loadMyGroups();
+  } catch(e) { alert('Could not join crew.'); }
 };
 
 window.openGroupModal = function(id, name, code, sharing, role) {
@@ -2788,10 +3552,24 @@ async function loadModalMembers(groupId) {
   try {
     var res = await fetch('/api/groups/'+groupId+'/members');
     var data = await res.json();
-    el.innerHTML = (data.members||[]).map(function(m) {
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-light);">'+
-        '<span style="font-size:13px;color:var(--text-primary);">'+m.username+'</span>'+
-        '<span style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">'+(m.role==='captain'?'CAPTAIN':'MEMBER')+'</span></div>';
+    var members = data.members || [];
+    var cntEl = document.getElementById('modal-member-count');
+    if (cntEl) cntEl.textContent = members.length + ' member' + (members.length !== 1 ? 's' : '');
+    el.innerHTML = members.map(function(m) {
+      var display = (m.username || '').split('@')[0];
+      var initials = _crewInitials(display);
+      var isCaptain = m.role === 'captain';
+      var isSelf = m.username === currentUsername;
+      var captainPill = isCaptain
+        ? '<span style="background:var(--accent);color:#fff;font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:4px;">CAPTAIN</span>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">' +
+        '<div style="flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--bg-primary);border:1px solid var(--border-light);display:flex;align-items:center;justify-content:center;color:var(--text-primary);font-size:11px;font-weight:700;">' + escHtml(initials) + '</div>' +
+        '<div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0;">' +
+          '<span style="font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(display) + (isSelf ? ' <span style="color:var(--text-muted);font-size:11px;">(you)</span>' : '') + '</span>' +
+          captainPill +
+        '</div>' +
+      '</div>';
     }).join('');
   } catch(e) {}
 }
@@ -2804,13 +3582,13 @@ window.toggleSharing = async function() {
 };
 
 window.leaveGroup = async function() {
-  if (!currentGroupId || !confirm('Leave this group?')) return;
+  if (!currentGroupId || !confirm('Leave this crew?')) return;
   try {
     var res = await fetch('/api/groups/'+currentGroupId+'/leave', {method:'POST'});
     var data = await res.json();
     if (data.error) { alert(data.error); return; }
     closeGroupModal(); loadMyGroups();
-  } catch(e) { alert('Could not leave group.'); }
+  } catch(e) { alert('Could not leave crew.'); }
 };
 
 window.transferCaptain = async function() {
@@ -2835,6 +3613,64 @@ window.copyInviteCode = function() {
   var code = document.getElementById('invite-code-display').textContent;
   navigator.clipboard.writeText(code).then(function() { alert('Copied: '+code); });
 };
+
+function _inviteLinkFor(code) {
+  return window.location.origin + window.location.pathname + '?invite=' + encodeURIComponent(code);
+}
+
+function _shareCodeOrCopy(code) {
+  if (!code || code === '---') return;
+  var url = _inviteLinkFor(code);
+  if (navigator.share) {
+    navigator.share({ title: 'Wheelhouse invite', text: 'Join my crew on Wheelhouse', url: url })
+      .catch(function() {});
+  } else {
+    var text = 'Join my Wheelhouse crew: ' + url;
+    navigator.clipboard.writeText(text).then(function() {
+      alert('Invite link copied — paste it into iMessage, text, or email.');
+    }, function() { alert(text); });
+  }
+}
+
+window.shareInviteLink = function() {
+  _shareCodeOrCopy(document.getElementById('invite-code-display').textContent);
+};
+
+window.shareModalInvite = function() {
+  _shareCodeOrCopy(currentGroupCode || document.getElementById('modal-group-code').textContent);
+};
+
+// Auto-fill the Join form when the URL has ?invite=CODE
+function _applyInviteFromUrl() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get('invite');
+    if (!code) return;
+    code = code.trim().toUpperCase();
+    // Switch to the Crews tab and open the Join form
+    if (typeof switchTab === 'function') {
+      try { switchTab('crews'); } catch(e) {}
+    }
+    if (typeof showJoinCrew === 'function') showJoinCrew();
+    var input = document.getElementById('join-code-input');
+    if (input) {
+      input.value = code;
+      input.style.borderColor = 'var(--accent)';
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(function() { input.style.borderColor = ''; }, 2000);
+    }
+    // Strip the param from the URL so a reload doesn't re-trigger
+    if (window.history && window.history.replaceState) {
+      var clean = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', clean);
+    }
+  } catch (e) {}
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _applyInviteFromUrl);
+} else {
+  _applyInviteFromUrl();
+}
 window.copyModalCode = function() {
   if (!currentGroupCode) return;
   navigator.clipboard.writeText(currentGroupCode).then(function() { alert('Copied: '+currentGroupCode); });
@@ -2851,7 +3687,7 @@ async function pollNotifications() {
       if (notifs.length > 0) {
         badge.style.display = 'inline-block'; badge.textContent = notifs.length;
         await fetch('/api/notifications/read', {method:'POST'});
-        if (activeGroupTab === 'feed') loadGroupFeed();
+        if (typeof loadMyGroups === 'function') { try { loadMyGroups(); } catch(e) {} }
       } else { badge.style.display = 'none'; }
     }
   } catch(e) {}

@@ -1812,9 +1812,11 @@ def api_feed_status():
 # Register routes
 from fishing_intel import register_routes as register_fishing_routes
 from captain_advisor import register_advisor_routes
+from photo_catch import register_photo_catch_routes
 
 register_fishing_routes(app, login_required)
 register_advisor_routes(app, login_required)
+register_photo_catch_routes(app, login_required)
 
 logger.info('Wheelhouse server initialized')
 
