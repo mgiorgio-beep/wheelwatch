@@ -74,31 +74,54 @@ body {
 .tab-panel {
   display: none;
   padding: 0 16px 16px;
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  padding-bottom: calc(105px + env(safe-area-inset-bottom));
   min-height: calc(100vh - 56px);
 }
 .tab-panel.active { display: block; }
 .tab-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; justify-content: space-around;
-  background: rgba(28,28,30,0.92);
+  display: flex; justify-content: space-around; align-items: flex-start;
+  background: rgba(28,28,30,0.94);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border-top: 0.5px solid rgba(255,255,255,0.08);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 8px 0 env(safe-area-inset-bottom);
   z-index: 500;
-  height: auto;
+  min-height: 82px;
 }
 .tab-item {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 2px;
-  padding: 6px 0 4px; background: none; border: none;
+  align-items: center; gap: 4px;
+  padding: 8px 0 6px; background: none; border: none;
   color: var(--text-muted); cursor: pointer;
-  font-family: inherit; font-size: 10px; font-weight: 500;
+  font-family: inherit; font-size: 12px; font-weight: 600;
   transition: color .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .tab-item.active { color: var(--accent); }
-.tab-item svg { width: 22px; height: 22px; }
+.tab-item svg { width: 30px; height: 30px; }
+.tab-item.tab-primary {
+  position: relative;
+  color: #fff;
+}
+.tab-item.tab-primary svg {
+  width: 34px; height: 34px;
+  background: var(--accent);
+  border-radius: 50%;
+  padding: 15px;
+  box-sizing: content-box;
+  margin-top: -36px;
+  box-shadow: 0 6px 20px rgba(10,132,255,0.55);
+  stroke-width: 2;
+  color: #fff;
+}
+.tab-item.tab-primary.active svg {
+  box-shadow: 0 4px 20px rgba(10,132,255,0.7);
+}
+.tab-item.tab-primary span {
+  margin-top: 2px;
+  color: var(--accent);
+  font-weight: 700;
+}
 
 /* ==================== CARDS ==================== */
 .fi-card {
@@ -269,7 +292,7 @@ body {
 
 /* ==================== ADVISOR BOTTOM SHEET ==================== */
 .advisor-fab {
-  position: fixed; bottom: calc(72px + env(safe-area-inset-bottom));
+  position: fixed; bottom: calc(102px + env(safe-area-inset-bottom));
   right: 16px; background: var(--accent); color: #fff;
   border: none; border-radius: 22px; padding: 10px 18px;
   font-family: inherit; font-size: 14px; font-weight: 600;
@@ -1205,7 +1228,7 @@ body {
     <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-3.5 3.5-3.5 14.5 0 18m0-18c3.5 3.5 3.5 14.5 0 18"/></svg>
     <span>Satellite</span>
   </button>
-  <button class="tab-item" id="tab-btn-catch" onclick="switchTab('catch')">
+  <button class="tab-item tab-primary" id="tab-btn-catch" onclick="switchTab('catch')">
     <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>
     <span>Log Catch</span>
   </button>
@@ -3283,9 +3306,12 @@ window.postPhotoClear = function() {
   if (input) input.value = '';
 };
 
+
+window.postPhotoClear = function() { postPhotoFile = null; };
+
 window.createPost = function() {
   var body = document.getElementById('post-body').value.trim();
-  if (!body && !postPhotoFile) {
+  if (!body) {
     document.getElementById('post-body').style.borderColor = 'var(--red)';
     setTimeout(function() { document.getElementById('post-body').style.borderColor = ''; }, 1500);
     return;
