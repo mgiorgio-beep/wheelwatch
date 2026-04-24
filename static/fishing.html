@@ -19,10 +19,17 @@
   --text-muted: #8E8E93;
   --accent: #0A84FF;
   --accent-dim: rgba(10,132,255,0.15);
+  --accent-glow: 0 6px 22px rgba(10,132,255,0.35);
   --green: #30D158;
   --red: #FF453A;
   --orange: #FF9F0A;
   --blue: #64D2FF;
+  --bg-inset: #17171A;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 6px 18px rgba(0,0,0,0.35);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -519,7 +526,7 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .feed-card-captain {
-  font-size: 14px; font-weight: 700; color: var(--text-primary);
+  font-size: 15px; font-weight: 700; color: var(--text-primary);
 }
 .feed-card-crew {
   font-size: 11px; color: var(--text-muted); font-weight: 400;
@@ -527,25 +534,26 @@ body {
 }
 .feed-card-body-text {
   font-size: 14px; color: var(--text-primary); margin-top: 8px;
-  line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+  line-height: 1.5; white-space: pre-wrap; word-break: break-word;
 }
 .feed-card-catch {
-  font-size: 15px; color: var(--text-primary); margin-top: 6px;
-  font-weight: 600;
+  font-size: 19px; color: var(--text-primary); margin-top: 8px;
+  font-weight: 700; letter-spacing: -0.2px;
 }
 .feed-card-meta {
-  font-size: 12px; color: var(--text-muted); margin-top: 6px;
+  font-size: 12px; color: var(--text-muted); margin-top: 8px;
+  letter-spacing: 0.3px;
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
 .feed-card-meta .dot { opacity: 0.5; }
 .feed-chip {
-  display: inline-block; padding: 2px 7px; border-radius: 999px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  display: inline-block; padding: 4px 9px; border-radius: var(--r-pill);
+  font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
   background: var(--accent-dim); color: var(--accent); text-transform: uppercase;
 }
 .feed-chip.public { background: rgba(48,209,88,0.15); color: var(--green); }
 .feed-chip.friends { background: rgba(10,132,255,0.15); color: var(--accent); }
-.feed-chip.catch { background: rgba(255,159,10,0.18); color: var(--orange); }
+.feed-chip.catch { background: rgba(255,159,10,0.15); color: var(--orange); }
 .feed-card-del {
   background: none; border: none; color: var(--text-muted); font-size: 11px;
   cursor: pointer; font-family: inherit; padding: 4px 6px;
@@ -554,6 +562,30 @@ body {
 .feed-empty {
   text-align: center; padding: 40px 20px; color: var(--text-muted);
   font-size: 13px;
+}
+
+/* Feed-scoped v2 card treatment — doesn't affect other tabs */
+#tab-feed.tab-panel { padding: 16px 12px calc(140px + env(safe-area-inset-bottom)); }
+#tab-feed .fi-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 14px;
+}
+#tab-feed .fi-card-body { padding: 14px 16px 16px; }
+#tab-feed textarea.catch-input {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-height: 70px; resize: vertical; line-height: 1.4;
+  transition: border-color .15s;
+}
+#tab-feed textarea.catch-input:focus { border-color: var(--accent); box-shadow: none; }
+#tab-feed .gtab-bar { margin-bottom: 0; }
+#tab-feed .catch-save {
+  width: auto; padding: 9px 18px; margin-top: 0;
+  border-radius: var(--r-pill); font-size: 13px;
+  box-shadow: var(--accent-glow);
 }
 
 /* Composer */
@@ -723,27 +755,29 @@ body {
     <span>Feed</span>
     <button onclick="loadFeed()" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Refresh</button>
   </div>
-  <div class="composer">
-    <textarea id="post-body" class="composer-textarea" maxlength="2000"
-              placeholder="What's on the water? Share a catch, a condition, a tip..."></textarea>
-    <input type="file" id="post-photo-input" accept="image/*" style="display:none;"
-           onchange="postPhotoPicked(event)">
-    <div id="post-photo-preview"></div>
-    <div class="composer-row">
-      <div class="composer-left">
-        <button class="composer-btn" onclick="document.getElementById('post-photo-input').click()" aria-label="Add photo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          <span>Photo</span>
-        </button>
-        <div class="composer-audience" role="tablist" aria-label="Who can see this post">
-          <button type="button" id="aud-friends" class="on" onclick="setPostAudience('friends')">Friends</button>
-          <button type="button" id="aud-public" onclick="setPostAudience('public')">Public</button>
+  <div class="fi-card">
+    <div class="fi-card-body">
+      <textarea id="post-body" class="catch-input" maxlength="2000"
+                placeholder="What's on the water? Share a catch, a condition, a tip..."></textarea>
+      <input type="file" id="post-photo-input" accept="image/*" style="display:none;"
+             onchange="postPhotoPicked(event)">
+      <div id="post-photo-preview"></div>
+      <div class="composer-row">
+        <div class="composer-left">
+          <button class="composer-btn" onclick="document.getElementById('post-photo-input').click()" aria-label="Add photo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span>Photo</span>
+          </button>
+          <div class="gtab-bar" role="tablist" aria-label="Who can see this post">
+            <button type="button" id="aud-friends" class="gtab-btn active" onclick="setPostAudience('friends')">Friends</button>
+            <button type="button" id="aud-public" class="gtab-btn" onclick="setPostAudience('public')">Public</button>
+          </div>
         </div>
+        <button class="catch-save" id="post-submit-btn" onclick="createPost()">Post</button>
       </div>
-      <button class="composer-post-btn" id="post-submit-btn" onclick="createPost()">Post</button>
     </div>
   </div>
   <div id="feed-list">
@@ -3252,8 +3286,8 @@ window.setPostAudience = function(a) {
   postAudience = (a === 'public') ? 'public' : 'friends';
   var f = document.getElementById('aud-friends');
   var p = document.getElementById('aud-public');
-  if (f) f.classList.toggle('on', postAudience === 'friends');
-  if (p) p.classList.toggle('on', postAudience === 'public');
+  if (f) f.classList.toggle('active', postAudience === 'friends');
+  if (p) p.classList.toggle('active', postAudience === 'public');
 };
 
 window.postPhotoPicked = function(evt) {
@@ -3385,9 +3419,9 @@ function renderFeedItem(it) {
   var delBtn = (it.type === 'post' && it.is_self)
     ? '<button class="feed-card-del" onclick="deletePost(' + it.id + ')">Delete</button>' : '';
 
-  return '<div class="feed-card">' +
+  return '<div class="fi-card">' +
     photoHtml +
-    '<div class="feed-card-body">' +
+    '<div class="fi-card-body">' +
       '<div class="feed-card-head">' +
         '<span class="feed-card-captain">' + captain + selfTag + '</span>' +
         '<span style="display:flex;align-items:center;gap:6px;">' + chip + delBtn + '</span>' +
