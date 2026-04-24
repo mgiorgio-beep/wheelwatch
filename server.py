@@ -86,6 +86,7 @@ def init_db():
         "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''",
         "ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN profile_pic TEXT DEFAULT NULL",
     ]:
         try:
             db.execute(col_sql)
@@ -329,7 +330,7 @@ def logout():
 @login_required
 def api_user_profile():
     db = get_db()
-    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified, is_admin FROM users WHERE id = ?',
+    user = db.execute('SELECT username, hide_welcome, phone_number, phone_verified, is_admin, first_name, last_name, profile_pic FROM users WHERE id = ?',
                       (session['user_id'],)).fetchone()
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -339,6 +340,9 @@ def api_user_profile():
         'phone_number': user['phone_number'],
         'phone_verified': bool(user['phone_verified']),
         'is_admin': bool(user['is_admin']),
+        'first_name': user['first_name'] or '',
+        'last_name': user['last_name'] or '',
+        'profile_pic': user['profile_pic'],
     })
 
 @app.route('/api/user/hide-welcome', methods=['POST'])
@@ -347,6 +351,54 @@ def api_user_hide_welcome():
     db = get_db()
     db.execute('UPDATE users SET hide_welcome = 1 WHERE id = ?', (session['user_id'],))
     db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/user/avatar', methods=['POST'])
+@login_required
+def api_user_avatar():
+    import uuid
+    if 'avatar' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    f = request.files['avatar']
+    if not f.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    allowed = {'image/jpeg', 'image/png', 'image/webp'}
+    if f.content_type not in allowed:
+        return jsonify({'error': 'Must be JPEG, PNG, or WebP'}), 400
+    data = f.read()
+    if len(data) > 2 * 1024 * 1024:
+        return jsonify({'error': 'Image must be under 2MB'}), 400
+    avatar_dir = os.path.join(app.static_folder, 'avatars')
+    os.makedirs(avatar_dir, exist_ok=True)
+    ext = 'jpg' if 'jpeg' in f.content_type else f.content_type.split('/')[-1]
+    filename = f'{session["user_id"]}_{uuid.uuid4().hex[:8]}.{ext}'
+    filepath = os.path.join(avatar_dir, filename)
+    with open(filepath, 'wb') as out:
+        out.write(data)
+    db = get_db()
+    old = db.execute('SELECT profile_pic FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if old and old['profile_pic']:
+        old_path = os.path.join(avatar_dir, old['profile_pic'])
+        if os.path.exists(old_path):
+            os.remove(old_path)
+    db.execute('UPDATE users SET profile_pic = ? WHERE id = ?', (filename, session['user_id']))
+    db.commit()
+    return jsonify({'ok': True, 'profile_pic': filename})
+
+
+@app.route('/api/user/avatar', methods=['DELETE'])
+@login_required
+def api_user_avatar_delete():
+    db = get_db()
+    user = db.execute('SELECT profile_pic FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if user and user['profile_pic']:
+        avatar_dir = os.path.join(app.static_folder, 'avatars')
+        old_path = os.path.join(avatar_dir, user['profile_pic'])
+        if os.path.exists(old_path):
+            os.remove(old_path)
+        db.execute('UPDATE users SET profile_pic = NULL WHERE id = ?', (session['user_id'],))
+        db.commit()
     return jsonify({'ok': True})
 
 
@@ -1812,9 +1864,11 @@ def api_feed_status():
 # Register routes
 from fishing_intel import register_routes as register_fishing_routes
 from captain_advisor import register_advisor_routes
+from photo_catch import register_photo_catch_routes
 
 register_fishing_routes(app, login_required)
 register_advisor_routes(app, login_required)
+register_photo_catch_routes(app, login_required)
 
 logger.info('Wheelhouse server initialized')
 
