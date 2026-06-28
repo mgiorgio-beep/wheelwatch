@@ -17,9 +17,12 @@ load_dotenv('/opt/rednun/.env', override=False)
 
 logger = logging.getLogger('wheelhouse')
 
+LOGS_DIR = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
-MODEL = 'claude-sonnet-4-20250514'
+MODEL = 'claude-opus-4-8'
 
 SYSTEM_PROMPT = """You are Wheelhouse — an expert AI fishing consultant for a charter boat captain operating out of Chatham, Massachusetts on Cape Cod. You have been given real-time oceanographic data and deep local knowledge.
 
