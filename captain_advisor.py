@@ -639,83 +639,20 @@ Rules:
 
     # ---- Catch Log Routes ----
 
-    def _snapshot_conditions():
-        """Snapshot current conditions for catch log."""
+    def _snapshot_conditions(lat=None, lon=None, depth_ft=None, water_temp_f=None):
+        """Snapshot current conditions for a catch log — canonical numeric schema.
+
+        Delegates to the shared conditions.build_conditions_snapshot() so every
+        catch logger (this route, photo_catch, SMS) writes identical, directly
+        comparable keys. Optional lat/lon/depth/temp overrides (e.g. from a Garmin
+        instrument photo) take precedence over computed values."""
         try:
-            briefing = get_briefing()
+            from conditions import build_conditions_snapshot
+            return build_conditions_snapshot(
+                lat=lat, lon=lon, depth_ft=depth_ft, water_temp_f=water_temp_f)
         except Exception as e:
-            logger.error(f'Catch log briefing error: {e}')
+            logger.error(f'Catch log conditions snapshot error: {e}')
             return {}
-
-        conditions = {}
-
-        # Water temp from buoy
-        buoy = briefing.get('buoy')
-        if buoy and buoy.get('observation'):
-            obs = buoy['observation']
-            wtmp = obs.get('WTMP')
-            if wtmp and wtmp != 'MM':
-                conditions['water_temp'] = f"{round(float(wtmp) * 9/5 + 32, 1)}°F"
-            wspd = obs.get('WSPD')
-            wdir = obs.get('WDIR', '')
-            gst = obs.get('GST')
-            if wspd:
-                wind_kt = round(float(wspd) * 1.944)
-                wind_str = f"{wdir}° at {wind_kt}kt"
-                if gst and gst != 'MM':
-                    wind_str += f" gusting {round(float(gst) * 1.944)}kt"
-                conditions['wind'] = wind_str
-            wvht = obs.get('WVHT')
-            if wvht and wvht != 'MM':
-                conditions['wave_height'] = f"{float(wvht):.1f}ft"
-
-        # Tide phase — find nearest hi/lo
-        tides = briefing.get('tides', {}).get('chatham')
-        if tides and tides.get('predictions'):
-            now = datetime.now()
-            nearest = None
-            for p in tides['predictions']:
-                try:
-                    t = datetime.strptime(p['t'], '%Y-%m-%d %H:%M')
-                    diff = (t - now).total_seconds() / 3600
-                    hilo = 'high' if p['type'] == 'H' else 'low'
-                    if nearest is None or abs(diff) < abs(nearest[0]):
-                        nearest = (diff, hilo, p['v'])
-                except:
-                    pass
-            if nearest:
-                diff_hr, hilo, val = nearest
-                if abs(diff_hr) < 0.5:
-                    conditions['tide_phase'] = f"At {hilo} tide ({val}ft)"
-                elif diff_hr > 0:
-                    conditions['tide_phase'] = f"{abs(diff_hr):.1f}hrs before {hilo} ({val}ft)"
-                else:
-                    conditions['tide_phase'] = f"{abs(diff_hr):.1f}hrs after {hilo} ({val}ft)"
-
-        # Current
-        currents = briefing.get('currents', {}).get('pollock_rip')
-        if currents and currents.get('predictions'):
-            now = datetime.now()
-            nearest = None
-            for p in currents['predictions']:
-                try:
-                    t = datetime.strptime(p['Time'], '%Y-%m-%d %H:%M')
-                    diff = (t - now).total_seconds() / 3600
-                    if nearest is None or abs(diff) < abs(nearest[0]):
-                        nearest = (diff, p.get('Type', ''), p.get('Velocity_Major', ''))
-                except:
-                    pass
-            if nearest:
-                _, ctype, vel = nearest
-                conditions['current'] = f"{ctype} {vel}kt at Pollock Rip"
-
-        # Weather
-        weather = briefing.get('weather')
-        if weather and weather.get('hourly'):
-            h = weather['hourly'][0]
-            conditions['weather'] = f"{h.get('shortForecast', '')}, {h.get('temperature', '')}°F, {h.get('windDirection', '')} {h.get('windSpeed', '')}"
-
-        return conditions
 
     @app.route('/api/fishing/log', methods=['POST'])
     @login_required
@@ -725,9 +662,10 @@ Rules:
         if not data or not data.get('spot'):
             return jsonify({'error': 'Spot is required'}), 400
 
-        conditions = _snapshot_conditions()
-
         gps = data.get('gps')
+        _lat = gps.get('lat') if gps else None
+        _lon = gps.get('lon') if gps else None
+        conditions = _snapshot_conditions(lat=_lat, lon=_lon)
         entry = {
             'timestamp': datetime.now().isoformat(),
             'logged_by': flask_session.get('username', 'unknown'),

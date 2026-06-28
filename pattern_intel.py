@@ -18,16 +18,18 @@ logger = logging.getLogger('wh-patterns')
 DB_PATH = '/opt/wheelhouse/wheelhouse.db'
 LOGS_DIR = '/opt/wheelhouse/logs'
 
-# Similarity weights — tide-relative matching weighted highest
+# Similarity weights — tide-relative matching weighted highest. Sums to 100.
+# Any feature absent from either record is simply skipped (never penalized).
 WEIGHTS = {
-    'tide_hours_to_high':  25,  # how far into the tidal cycle
-    'tide_direction':      20,  # flooding vs ebbing
-    'sst_gradient':        15,  # temp break strength
-    'sst_trend':           10,  # is break strengthening or weakening
-    'water_temp':          10,  # absolute water temp
-    'moon_phase':          10,  # lunar cycle position
-    'solunar_rating':       5,  # major/minor period quality
-    'tide_strength':        5,  # spring vs neap
+    'tide_hours_to_high':  22,  # how far into the tidal cycle
+    'tide_direction':      18,  # flooding vs ebbing
+    'sst_gradient':        13,  # temp break strength
+    'sst_trend':            8,  # is break strengthening or weakening
+    'water_temp_f':        10,  # absolute water temp
+    'moon_phase':           9,  # lunar cycle position
+    'solunar_rating':       4,  # major/minor period quality
+    'tide_strength':        4,  # spring vs neap
+    'depth_ft':            12,  # depth fished (Garmin)
 }
 
 
@@ -74,9 +76,18 @@ def _score_similarity(target, candidate):
     c_wt = candidate.get('water_temp_f')
     if t_wt is not None and c_wt is not None:
         diff = abs(t_wt - c_wt)
-        if diff <= 2:   score += WEIGHTS['water_temp']
-        elif diff <= 4: score += WEIGHTS['water_temp'] * 0.5
-        elif diff <= 6: score += WEIGHTS['water_temp'] * 0.2
+        if diff <= 2:   score += WEIGHTS['water_temp_f']
+        elif diff <= 4: score += WEIGHTS['water_temp_f'] * 0.5
+        elif diff <= 6: score += WEIGHTS['water_temp_f'] * 0.2
+
+    # Depth fished (from Garmin instrument) — only scored when both sides have it
+    t_depth = target.get('depth_ft')
+    c_depth = candidate.get('depth_ft')
+    if t_depth is not None and c_depth is not None:
+        diff = abs(t_depth - c_depth)
+        if diff <= 5:    score += WEIGHTS['depth_ft']
+        elif diff <= 15: score += WEIGHTS['depth_ft'] * 0.5
+        elif diff <= 30: score += WEIGHTS['depth_ft'] * 0.2
 
     # Moon phase (use illumination as proxy)
     t_moon = target.get('moon_illumination')
@@ -259,19 +270,14 @@ def get_pattern_prediction(trip_hour=None):
         score = _score_similarity(target_conditions, hist)
         scored_conditions.append({'record': hist, 'score': score})
 
-    # Score each logged catch against its own conditions at catch time
+    # Score each logged catch against its own conditions at catch time.
+    # Catch conditions are now stored in the canonical numeric schema
+    # (see conditions.build_conditions_snapshot), so they are read directly —
+    # no string re-parsing, no faked SST gradient.
     catch_matches = []
     for catch in catch_records:
         cond = catch['conditions']
-        catch_cond = {
-            'tide_hours_to_next_high': _parse_tide_hours(cond.get('tide_phase', '')),
-            'tide_direction': _infer_tide_direction(cond.get('tide_phase', '')),
-            'water_temp_f': _parse_float(cond.get('water_temp', '')),
-            'wind_speed_kt': _parse_float(cond.get('wind', '').split('kt')[0].split()[-1]
-                                          if 'kt' in cond.get('wind', '') else ''),
-            'sst_gradient_f': target_conditions.get('sst_gradient_f'),
-        }
-        score = _score_similarity(target_conditions, catch_cond)
+        score = _score_similarity(target_conditions, cond)
         catch_matches.append({
             'catch': catch,
             'score': score,
@@ -358,37 +364,3 @@ def _seasonal_note(month, index):
         return f"Historical MRIP data: below-average season timing (index {index:.1f}x average)."
 
 
-def _parse_tide_hours(tide_phase_str):
-    """Parse tide phase string like '2.3hrs before high (4.5ft)' into hours-to-high."""
-    try:
-        if 'before high' in tide_phase_str:
-            return float(tide_phase_str.split('hrs')[0].strip())
-        elif 'after high' in tide_phase_str:
-            hours = float(tide_phase_str.split('hrs')[0].strip())
-            return -hours
-        elif 'At high' in tide_phase_str:
-            return 0.0
-    except Exception:
-        pass
-    return None
-
-
-def _infer_tide_direction(tide_phase_str):
-    """Infer flooding/ebbing from tide phase string."""
-    if 'before high' in tide_phase_str:
-        return 'flooding'
-    elif 'after high' in tide_phase_str:
-        return 'ebbing'
-    elif 'before low' in tide_phase_str:
-        return 'ebbing'
-    elif 'after low' in tide_phase_str:
-        return 'flooding'
-    return None
-
-
-def _parse_float(s):
-    """Safely parse a float from a string."""
-    try:
-        return float(str(s).strip())
-    except Exception:
-        return None

@@ -31,11 +31,15 @@ BASE_DIR = os.path.dirname(__file__)
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 PHOTOS_DIR = os.path.join(BASE_DIR, 'catch_photos')
 POST_PHOTOS_DIR = os.path.join(BASE_DIR, 'post_photos')
+# Private store for Garmin/instrument photos. These are read for value extraction
+# ONLY and must NEVER be served to the feed or inserted into the posts table.
+INSTRUMENT_DIR = os.path.join(LOGS_DIR, 'instrument')
 DB_PATH = os.path.join(BASE_DIR, 'wheelhouse.db')
 
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 os.makedirs(POST_PHOTOS_DIR, exist_ok=True)
+os.makedirs(INSTRUMENT_DIR, exist_ok=True)
 
 
 def _ensure_posts_table():
@@ -117,13 +121,42 @@ Identify the fish and estimate its length in inches. Common species here: Stripe
 
 Size estimation — use whatever reference is in the frame: the angler's hand, forearm, a rod, a boat deck plank. Be realistic, not generous. A striper "looks big in the hand" is not a 40-incher.
 
+If a lure or bait is visible in the fish's mouth or the frame, identify it: type and color (e.g. "white bucktail", "chartreuse soft plastic", "live eel", "metal jig"). If no lure/bait is visible, return null — do not guess.
+
 Respond with ONLY valid JSON — no markdown, no prose:
 {
   "species": "<e.g. 'Striped Bass' or 'Unknown'>",
   "size_inches": <number or null if not estimable>,
   "species_confidence": "<low|medium|high>",
   "size_confidence": "<low|medium|high>",
+  "lure": "<lure/bait type + color, e.g. 'white bucktail'; null if not visible>",
+  "lure_confidence": "<low|medium|high>",
   "notes": "<one short sentence on what you see — reference used, condition of fish, anything notable>"
+}"""
+
+
+INSTRUMENT_VISION_PROMPT = """You are reading a marine electronics screen (Garmin/Lowrance/Humminbird fishfinder/chartplotter) photographed on a fishing boat near Chatham, MA.
+
+The screen may be a full sonar page, or a split page showing sonar AND a position/chart panel. Extract ONLY values that are clearly legible as on-screen numbers — do NOT infer or estimate. If a value is not visible or you cannot read it confidently, return null for that field.
+
+Read units off the screen. Temperature may be °F or °C. Depth may be feet (ft) or meters (m). Report the raw number and the unit you saw in "units_seen"; do NOT convert — the caller converts.
+
+- water_temp_f: the main water temperature reading (often a large 'TEMP' value). Report the NUMBER as shown.
+- surface_temp_f: a separate surface temperature reading if the screen distinguishes one; else null.
+- depth_ft: the depth reading as shown (often a large 'DEPTH' number).
+- lat, lon: GPS position if a position/chart panel is shown (decimal degrees; west longitude negative). Null if no position shown.
+- speed_kt: speed over ground if shown.
+- units_seen: object noting the units printed on screen, e.g. {"temp":"F","depth":"ft"} or {"temp":"C","depth":"m"}.
+
+Respond with ONLY valid JSON — no markdown, no prose:
+{
+  "water_temp_f": <number as shown or null>,
+  "surface_temp_f": <number as shown or null>,
+  "depth_ft": <number as shown or null>,
+  "lat": <decimal degrees or null>,
+  "lon": <decimal degrees or null>,
+  "speed_kt": <number or null>,
+  "units_seen": {"temp": "<F|C|null>", "depth": "<ft|m|null>"}
 }"""
 
 
@@ -183,6 +216,89 @@ def _parse_photo_with_claude(image_bytes, media_type='image/jpeg'):
     )
     text = _extract_text(response)
     return _parse_vision_json(text)
+
+
+def _c_to_f(c):
+    return c * 9 / 5 + 32
+
+
+def _m_to_ft(m):
+    return m * 3.28084
+
+
+def _normalize_instrument(raw):
+    """Convert a raw Garmin extraction to canonical F / feet. Returns a dict with
+    water_temp_f, depth_ft, lat, lon, speed_kt — each None if illegible/absent."""
+    units = raw.get('units_seen') or {}
+    temp_unit = str(units.get('temp') or '').strip().upper()
+    depth_unit = str(units.get('depth') or '').strip().lower()
+
+    def num(v):
+        try:
+            if v is None:
+                return None
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    # Temperature: prefer a dedicated water temp, fall back to surface temp.
+    temp = num(raw.get('water_temp_f'))
+    if temp is None:
+        temp = num(raw.get('surface_temp_f'))
+    if temp is not None and temp_unit == 'C':
+        temp = _c_to_f(temp)
+
+    depth = num(raw.get('depth_ft'))
+    if depth is not None and depth_unit in ('m', 'meter', 'meters'):
+        depth = _m_to_ft(depth)
+
+    lat = num(raw.get('lat'))
+    lon = num(raw.get('lon'))
+    speed = num(raw.get('speed_kt'))
+
+    return {
+        'water_temp_f': round(temp, 1) if temp is not None else None,
+        'depth_ft': round(depth, 1) if depth is not None else None,
+        'lat': lat,
+        'lon': lon,
+        'speed_kt': round(speed, 1) if speed is not None else None,
+    }
+
+
+def _parse_instrument_with_claude(image_bytes, media_type='image/jpeg'):
+    """Read a Garmin/fishfinder screen via Opus Vision. Returns canonical (F/feet) dict.
+    The image is used ONLY for extraction here — the caller must never persist it to
+    the posts table or any feed photo directory."""
+    import anthropic
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        raise RuntimeError('ANTHROPIC_API_KEY not configured')
+
+    client = anthropic.Anthropic(api_key=api_key)
+    img_b64 = base64.standard_b64encode(image_bytes).decode('ascii')
+
+    response = client.messages.create(
+        model='claude-opus-4-8',
+        max_tokens=1024,
+        thinking={'type': 'adaptive'},
+        messages=[{
+            'role': 'user',
+            'content': [
+                {
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': media_type,
+                        'data': img_b64,
+                    },
+                },
+                {'type': 'text', 'text': INSTRUMENT_VISION_PROMPT},
+            ],
+        }],
+    )
+    raw = _parse_vision_json(_extract_text(response))
+    return _normalize_instrument(raw)
 
 
 # ==================== IMAGE HANDLING ====================
@@ -282,6 +398,8 @@ def register_photo_catch_routes(app, login_required):
                 'size_inches': parsed.get('size_inches'),
                 'species_confidence': parsed.get('species_confidence', 'low'),
                 'size_confidence': parsed.get('size_confidence', 'low'),
+                'lure': parsed.get('lure') or '',
+                'lure_confidence': parsed.get('lure_confidence', 'low'),
                 'notes': parsed.get('notes', ''),
                 'exif_lat': exif_lat,
                 'exif_lon': exif_lon,
@@ -344,18 +462,42 @@ def register_photo_catch_routes(app, login_required):
             logger.error(f'Photo resize/save failed: {e}')
             return jsonify({'error': 'Could not save photo'}), 500
 
-        # Snapshot conditions using the same helper used by text-based catch logs
+        # Optional Garmin/instrument photo: extract numeric values, then DISCARD or
+        # store ONLY in the private instrument dir. It must NEVER reach the posts
+        # table or any feed photo directory.
+        instrument = None
+        instr_file = request.files.get('instrument_photo')
+        if instr_file:
+            try:
+                instr_bytes = instr_file.read()
+                if instr_bytes and len(instr_bytes) <= 15 * 1024 * 1024:
+                    media_type = instr_file.mimetype if instr_file.mimetype in (
+                        'image/jpeg', 'image/png', 'image/gif', 'image/webp') else 'image/jpeg'
+                    instrument = _parse_instrument_with_claude(instr_bytes, media_type=media_type)
+                    # Store privately (resized, EXIF-stripped) for audit — never served.
+                    try:
+                        instr_name = f'instrument_{safe_user}_{ts}.jpg'
+                        _resize_and_save(instr_bytes, os.path.join(INSTRUMENT_DIR, instr_name))
+                    except Exception as e:
+                        logger.warning(f'Instrument photo store skipped: {e}')
+                    logger.info(f'Instrument extract for {username}: {instrument}')
+            except Exception as e:
+                logger.warning(f'Instrument photo parse skipped: {e}')
+
+        # Garmin values override computed conditions; GPS from the instrument wins.
+        garmin_temp = instrument.get('water_temp_f') if instrument else None
+        garmin_depth = instrument.get('depth_ft') if instrument else None
+        if instrument and instrument.get('lat') is not None and instrument.get('lon') is not None:
+            lat, lon = instrument['lat'], instrument['lon']
+            gps = {'lat': lat, 'lon': lon}
+            gps_source = 'instrument'
+
+        # Snapshot canonical numeric conditions via the shared helper.
         conditions = {}
         try:
-            # captain_advisor defines _snapshot_conditions inside register_advisor_routes — not importable.
-            # Re-derive minimal conditions inline (best-effort, non-fatal).
-            from fishing_intel import get_briefing
-            briefing = get_briefing()
-            buoy = (briefing or {}).get('buoy') or {}
-            obs = buoy.get('observation') or {}
-            wtmp = obs.get('WTMP')
-            if wtmp and wtmp != 'MM':
-                conditions['water_temp'] = f"{round(float(wtmp) * 9/5 + 32, 1)}°F"
+            from conditions import build_conditions_snapshot
+            conditions = build_conditions_snapshot(
+                lat=lat, lon=lon, depth_ft=garmin_depth, water_temp_f=garmin_temp)
         except Exception as e:
             logger.warning(f'Conditions snapshot skipped: {e}')
 
@@ -379,6 +521,8 @@ def register_photo_catch_routes(app, login_required):
             'source': 'photo',
             'gps_source': gps_source,
         }
+        if instrument:
+            entry['instrument'] = instrument
 
         log_filename = f'catch_{ts}.json'
         log_path = os.path.join(LOGS_DIR, log_filename)

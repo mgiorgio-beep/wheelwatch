@@ -873,6 +873,18 @@ body {
         <span class="sub">Reads GPS from photo if available</span>
       </button>
       <div id="catch-photo-preview"></div>
+      <input type="file" id="catch-instrument-input" accept="image/*"
+             style="display:none;" onchange="catchInstrumentPicked(event)">
+      <button class="photo-catch-btn secondary" id="catch-instrument-btn"
+              onclick="document.getElementById('catch-instrument-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+        <span>Add sonar / instrument photo (optional)</span>
+        <span class="sub">Reads water temp, depth &amp; GPS off your Garmin — not shared</span>
+      </button>
+      <div id="catch-instrument-status" style="font-size:11px;margin-top:4px;color:var(--text-muted);"></div>
     </div>
     <div class="catch-label">Spot</div>
     <div class="catch-chips" id="catch-spot-chips">
@@ -2835,6 +2847,19 @@ window.deleteCatch = function(btn) {
 var catchGps = null;
 var catchPhotoFile = null;
 var catchPhotoExifGps = null;  // {lat, lon} read client-side from the picked file
+var catchInstrumentFile = null;  // optional Garmin/sonar screen — read for values, never shared
+
+window.catchInstrumentPicked = function(evt) {
+  var f = evt.target.files && evt.target.files[0];
+  var statusEl = document.getElementById('catch-instrument-status');
+  if (!f) { catchInstrumentFile = null; if (statusEl) statusEl.textContent = ''; return; }
+  if (statusEl) statusEl.textContent = 'Reading instrument photo on save…';
+  compressImage(f, 1600, 0.85, function(processed) {
+    catchInstrumentFile = processed;
+    if (statusEl) statusEl.innerHTML =
+      '<span style="color:var(--green);">Sonar photo attached</span> — temp/depth/GPS read on save, then discarded from the feed.';
+  });
+};
 
 // Read JPEG EXIF GPS tags client-side. Handles only what we need: APP1/Exif,
 // TIFF header, IFD0 → GPSInfo pointer (0x8825), GPSLatitude/Longitude + refs.
@@ -3027,6 +3052,15 @@ function catchParsePhoto(fd) {
           speciesSel.appendChild(opt);
         }
       }
+      // Lure / bait — surface for confirm/edit like species. Never overwrite a
+      // value the captain typed in manually (only fill when the field is empty).
+      if (data.lure) {
+        var lureEl = document.getElementById('catch-lure');
+        if (lureEl && lureEl.value.trim() === '') {
+          lureEl.value = data.lure;
+          catchPhotoFile._wh_lure_confidence = data.lure_confidence;
+        }
+      }
       // Notes: prepend size + Claude note, preserve any existing notes
       var notesEl = document.getElementById('catch-notes');
       var autoBits = [];
@@ -3081,6 +3115,11 @@ function catchParsePhoto(fd) {
 window.catchPhotoClear = function() {
   catchPhotoFile = null;
   catchPhotoExifGps = null;
+  catchInstrumentFile = null;
+  var instrInput = document.getElementById('catch-instrument-input');
+  if (instrInput) instrInput.value = '';
+  var instrStatus = document.getElementById('catch-instrument-status');
+  if (instrStatus) instrStatus.textContent = '';
   var preview = document.getElementById('catch-photo-preview');
   if (preview) preview.innerHTML = '';
   var input = document.getElementById('catch-photo-input');
@@ -3180,6 +3219,7 @@ window.catchSave = function() {
     if (catchPhotoFile._wh_size_inches != null) fd.append('size_inches', catchPhotoFile._wh_size_inches);
     if (catchPhotoFile._wh_species_confidence) fd.append('species_confidence', catchPhotoFile._wh_species_confidence);
     if (catchPhotoFile._wh_size_confidence) fd.append('size_confidence', catchPhotoFile._wh_size_confidence);
+    if (catchInstrumentFile) fd.append('instrument_photo', catchInstrumentFile);
     fetch('/log-catch-photo', { method: 'POST', body: fd })
       .then(function(r) { return r.json(); })
       .then(function(data) { if (data.error) onErr(); else onOk(); })
