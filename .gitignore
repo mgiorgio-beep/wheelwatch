@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.pyc
 *.bak-*
+*.bak.*
 wheelhouse.db
 logs/
 catch_photos/

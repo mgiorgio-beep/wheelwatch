@@ -269,15 +269,8 @@ def signup():
 def render_auth_page(mode, error=None):
     err_html = '<div class="err">{}</div>'.format(error) if error else ''
     if mode == 'signup':
-        form = '''
-        <form method="POST">
-        <div style="display:flex;gap:8px;">
-        <input type="text" name="first_name" placeholder="First name" autocomplete="given-name" autofocus style="flex:1">
-        <input type="text" name="last_name" placeholder="Last name" autocomplete="family-name" style="flex:1">
-        </div>
-        <input type="email" name="username" placeholder="Email address" autocomplete="email">
-        <input type="password" name="password" placeholder="Password" autocomplete="new-password">
-        <input type="password" name="confirm" placeholder="Confirm password" autocomplete="new-password">
+        # SMS onboarding copy + phone field only shown when the SMS feature is on.
+        phone_block = '''
         <div style="margin:12px 0 4px;text-align:left">
           <div style="font-size:12px;font-weight:600;color:#1a2a3a;margin-bottom:6px">Phone number <span style="color:#7a8a9a;font-weight:400">(optional)</span></div>
           <input type="tel" name="phone" placeholder="(617) 555-1234" autocomplete="tel" style="margin-bottom:6px">
@@ -288,6 +281,17 @@ def render_auth_page(mode, error=None):
             Without phone: Full app access &mdash; no text notifications. You can always add your phone later in Settings.
           </div>
         </div>
+        ''' if SMS_ENABLED else ''
+        form = '''
+        <form method="POST">
+        <div style="display:flex;gap:8px;">
+        <input type="text" name="first_name" placeholder="First name" autocomplete="given-name" autofocus style="flex:1">
+        <input type="text" name="last_name" placeholder="Last name" autocomplete="family-name" style="flex:1">
+        </div>
+        <input type="email" name="username" placeholder="Email address" autocomplete="email">
+        <input type="password" name="password" placeholder="Password" autocomplete="new-password">
+        <input type="password" name="confirm" placeholder="Confirm password" autocomplete="new-password">
+        ''' + phone_block + '''
         <button type="submit">CREATE ACCOUNT</button>
         </form>
         <div class="link">Already have an account? <a href="/login">Log in</a></div>
@@ -463,12 +467,22 @@ TWILIO_SID   = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_FROM  = os.environ.get('TWILIO_PHONE_NUMBER', '')
 
+# Master switch for the entire SMS feature. Read once at startup. When false (the
+# default) the inbound webhook no-ops, no outbound Twilio sends are attempted, the
+# Twilio client is never constructed, and user-facing SMS copy is hidden. In-app /
+# Friend Group notifications are unaffected. Reversible — flip SMS_ENABLED in .env.
+SMS_ENABLED = os.environ.get('SMS_ENABLED', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+logger.info(f'SMS feature {"ENABLED" if SMS_ENABLED else "DISABLED"} (SMS_ENABLED)')
+
 def get_twilio_client():
     from twilio.rest import Client as TwilioClient
     return TwilioClient(TWILIO_SID, TWILIO_TOKEN)
 
 def _send_sms(to_number, body):
-    """Send an SMS via Twilio. Returns True on success."""
+    """Send an SMS via Twilio. Returns True on success. No-op when SMS is disabled."""
+    if not SMS_ENABLED:
+        logger.info('SMS disabled — outbound send skipped')
+        return False
     if not TWILIO_SID or not TWILIO_TOKEN:
         logger.error('Twilio not configured')
         return False
@@ -481,7 +495,11 @@ def _send_sms(to_number, body):
         return False
 
 def sms_reply(to_number, body):
-    """Send an SMS reply via Twilio. Splits long messages automatically."""
+    """Send an SMS reply via Twilio. Splits long messages automatically.
+    No-op when SMS is disabled."""
+    if not SMS_ENABLED:
+        logger.info('SMS disabled — outbound reply skipped')
+        return False
     if not TWILIO_SID or not TWILIO_TOKEN:
         logger.error('Twilio credentials not configured')
         return False
@@ -974,6 +992,12 @@ def log_sms(phone_number, direction, body, twilio_sid=None):
 @app.route('/api/sms/inbound', methods=['POST'])
 def sms_inbound():
     """Twilio webhook — receives inbound SMS."""
+    # SMS feature disabled: acknowledge with empty TwiML and do nothing else —
+    # no signature check, no parsing, no DB writes, no catch logging, no replies.
+    if not SMS_ENABLED:
+        return ('<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                200, {'Content-Type': 'text/xml'})
+
     if TWILIO_TOKEN:
         from twilio.request_validator import RequestValidator
         validator = RequestValidator(TWILIO_TOKEN)
@@ -1056,8 +1080,9 @@ def sms_inbound():
             text = ''.join(b['text'] for b in r.json().get('content',[]) if b.get('type')=='text')
             parsed = json.loads(text.strip())
 
-            from captain_advisor import _snapshot_conditions, LOGS_DIR
-            conditions = _snapshot_conditions()
+            from captain_advisor import LOGS_DIR
+            from conditions import build_conditions_snapshot
+            conditions = build_conditions_snapshot()
             entry = {
                 'timestamp': datetime.now().isoformat(),
                 'logged_by': username,
