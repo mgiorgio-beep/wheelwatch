@@ -766,18 +766,39 @@ Rules:
                 if entry.get('logged_by', '') != current_user:
                     continue
                 dt = datetime.fromisoformat(entry['timestamp'])
-                logs.append({
+                row = {
                     'filename': os.path.basename(fp),
                     'date': dt.strftime('%b %d, %Y %I:%M %p'),
+                    'date_short': dt.strftime('%b %d'),
+                    'time': dt.strftime('%I:%M %p').lstrip('0'),
                     'logged_by': entry.get('logged_by', ''),
                     'spot': entry.get('spot', ''),
                     'gps': entry.get('gps'),
+                    'area_name': entry.get('area_name', ''),
+                    'gps_source': entry.get('gps_source', ''),
                     'species': entry.get('species', ''),
+                    'species_confidence': entry.get('species_confidence', ''),
+                    'size_inches': entry.get('size_inches'),
+                    'size_confidence': entry.get('size_confidence', ''),
                     'technique': entry.get('technique', ''),
                     'lure': entry.get('lure', ''),
                     'notes': entry.get('notes', ''),
+                    'photo_filename': entry.get('photo_filename', ''),
                     'conditions': entry.get('conditions', {}),
-                })
+                }
+                # Owner-only view: include the private Garmin/instrument block and a
+                # link to its screenshot. This endpoint is already filtered to the
+                # logged-in owner, and the instrument image route is owner-only, so
+                # this never reaches the public feed.
+                instrument = entry.get('instrument')
+                if instrument:
+                    row['instrument'] = instrument
+                    photo_fn = entry.get('photo_filename', '')
+                    if photo_fn.startswith('catch_'):
+                        instr_fn = 'instrument_' + photo_fn[len('catch_'):]
+                        if os.path.exists(os.path.join(LOGS_DIR, 'instrument', instr_fn)):
+                            row['instrument_image'] = instr_fn
+                logs.append(row)
             except Exception as e:
                 logger.error(f'Error reading catch log {fp}: {e}')
         return jsonify({'logs': logs})

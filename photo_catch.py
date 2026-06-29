@@ -606,6 +606,27 @@ def register_photo_catch_routes(app, login_required):
                 return jsonify({'error': 'Not authorized'}), 403
         return send_from_directory(PHOTOS_DIR, filename)
 
+    @app.route('/instrument-photos/<filename>')
+    @login_required
+    def serve_instrument_photo(filename):
+        """Serve a private Garmin/instrument screenshot. OWNER ONLY — these are
+        never crew-shared and must NEVER appear in any feed. Unlike catch photos,
+        there is no crew fallback: only the angler who logged it may view it."""
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+        instr_path = os.path.join(INSTRUMENT_DIR, filename)
+        if not os.path.exists(instr_path):
+            return jsonify({'error': 'Not found'}), 404
+        # Filename format: instrument_<safe_user>_<timestamp>.jpg — parse owner.
+        viewer = session.get('username', '')
+        owner_safe = ''
+        parts = filename.split('_', 2)
+        if len(parts) >= 3 and parts[0] == 'instrument':
+            owner_safe = parts[1]
+        if not owner_safe or owner_safe != _safe_user(viewer):
+            return jsonify({'error': 'Not authorized'}), 403
+        return send_from_directory(INSTRUMENT_DIR, filename)
+
     @app.route('/api/crew-feed')
     @login_required
     def crew_feed():
