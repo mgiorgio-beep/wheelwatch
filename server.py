@@ -504,6 +504,66 @@ def api_bot_advisor():
     return jsonify({'reply': reply})
 
 
+# ==================== PUSH / TELEGRAM NOTIFICATIONS ====================
+
+@app.route('/api/push/key')
+@login_required
+def api_push_key():
+    from push_notify import vapid_public_key
+    key = vapid_public_key()
+    if not key:
+        return jsonify({'error': 'push not configured'}), 503
+    return jsonify({'key': key})
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def api_push_subscribe():
+    from push_notify import save_subscription
+    sub = request.get_json(silent=True) or {}
+    if not save_subscription(session.get('username', ''), sub):
+        return jsonify({'error': 'invalid subscription'}), 400
+    return jsonify({'saved': True})
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+def api_push_unsubscribe():
+    from push_notify import remove_subscription
+    data = request.get_json(silent=True) or {}
+    if data.get('endpoint'):
+        remove_subscription(data['endpoint'])
+    return jsonify({'removed': True})
+
+
+@app.route('/api/push/test', methods=['POST'])
+@login_required
+def api_push_test():
+    from push_notify import push_to_user
+    n = push_to_user(session.get('username', ''), 'Wheelhouse',
+                     'Notifications are working. Tight lines.', url='/')
+    return jsonify({'sent': n})
+
+
+@app.route('/api/telegram/link-code', methods=['POST'])
+@login_required
+def api_telegram_link_code():
+    """Generate a one-time code the user sends to the Telegram bot to link accounts."""
+    from push_notify import ensure_tables
+    import secrets as _secrets
+    ensure_tables()
+    username = session.get('username', '')
+    code = _secrets.token_hex(3).upper()  # e.g. 'A3F2B1'
+    db = get_db()
+    db.execute("""INSERT INTO telegram_links (username, link_code)
+                  VALUES (?, ?)
+                  ON CONFLICT(username) DO UPDATE SET link_code = excluded.link_code""",
+               (username, code))
+    db.commit()
+    bot_name = os.environ.get('TELEGRAM_BOT_NAME', '')
+    return jsonify({'code': code, 'bot': bot_name})
+
+
 @app.route('/api/suggestion', methods=['POST'])
 @login_required
 def api_suggestion():

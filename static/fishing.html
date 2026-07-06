@@ -846,6 +846,11 @@ body {
 <div class="tab-panel" id="tab-catch">
   <div class="section-header">Log a Catch</div>
   <div id="catch-success-toast" class="catch-success-toast"></div>
+  <div id="push-nudge" style="display:none;background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px;padding:10px 12px;margin-bottom:12px;align-items:center;gap:10px;">
+    <div style="flex:1;font-size:13px;color:var(--text-primary);line-height:1.4;">Get crew catch alerts? <span style="color:var(--text-muted);">Enable notifications</span></div>
+    <button onclick="pushNudgeEnable()" style="background:var(--accent);border:none;color:#fff;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Enable</button>
+    <button onclick="pushNudgeDismiss()" style="background:none;border:none;color:var(--text-muted);font-size:18px;line-height:1;cursor:pointer;padding:0 4px;">&times;</button>
+  </div>
   <div id="catch-queue-badge" onclick="syncCatchQueue()"
        style="display:none;background:rgba(255,159,10,0.15);color:var(--orange);border:1px solid var(--orange);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;"></div>
   <div id="catch-body">
@@ -1050,6 +1055,24 @@ body {
           <button onclick="hideCrewMap()" style="width:100%;padding:10px;background:var(--bg-primary);border:none;color:var(--text-muted);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">Close Map</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Notifications (Web Push + Telegram) -->
+  <div class="fi-card" id="notify-section">
+    <div class="fi-card-header">
+      <div class="fi-card-title">Notifications</div>
+      <div id="notify-status" style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">Off</div>
+    </div>
+    <div class="fi-card-body">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Get an alert when a crewmate logs a catch — even with the app closed.</p>
+      <div id="notify-guidance" style="display:none;background:var(--bg-primary);border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;color:var(--text-secondary);line-height:1.5;"></div>
+      <button id="notify-enable-btn" onclick="pushEnable()" style="width:100%;padding:12px;background:var(--accent);border:none;color:#fff;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;">Enable Notifications</button>
+      <button id="notify-test-btn" onclick="pushSendTest()" style="display:none;width:100%;padding:10px;background:var(--bg-primary);border:1px solid var(--border-light);color:var(--accent);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">Send Test Notification</button>
+      <div class="divider" style="margin:14px 0;"></div>
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Telegram</div>
+      <button id="tg-link-btn" onclick="telegramLink()" style="width:100%;padding:11px 8px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-light);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">Link Telegram</button>
+      <div id="tg-link-result" style="display:none;margin-top:10px;text-align:center;background:var(--bg-primary);border-radius:10px;padding:14px;"></div>
     </div>
   </div>
 
@@ -3333,6 +3356,7 @@ window.catchSave = function() {
   var onOk = function() {
     btn.textContent = 'Logged!'; btn.style.background = 'var(--green)';
     _catchLogs = [];
+    maybeShowPushNudge();
     setTimeout(function() {
       catchResetForm();
       btn.style.background = '';
@@ -4314,12 +4338,190 @@ window.flyToMember = function(lat, lon) {
   if (crewMap) crewMap.flyTo([lat, lon], 13, { duration: 1.5 });
 };
 
+// ==================== NOTIFICATIONS (WEB PUSH + TELEGRAM) ====================
+function urlBase64ToUint8Array(base64String) {
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var raw = window.atob(base64);
+  var arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function isStandaloneApp() {
+  return navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+}
+
+function pushSetStatus(label, color) {
+  var el = document.getElementById('notify-status');
+  if (el) { el.textContent = label; el.style.color = color || 'var(--text-muted)'; }
+}
+
+function pushShowGuidance(msg) {
+  var el = document.getElementById('notify-guidance');
+  if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+}
+
+function pushReflectEnabled(enabled) {
+  var enableBtn = document.getElementById('notify-enable-btn');
+  var testBtn = document.getElementById('notify-test-btn');
+  if (enableBtn) enableBtn.style.display = enabled ? 'none' : 'block';
+  if (testBtn) testBtn.style.display = enabled ? 'block' : 'none';
+  if (enabled) { pushSetStatus('Enabled', 'var(--green)'); pushShowGuidance(''); }
+}
+
+async function pushSubscribeAndSave() {
+  var keyRes = await fetch('/api/push/key');
+  if (!keyRes.ok) throw new Error('Push notifications are not configured on the server yet.');
+  var key = (await keyRes.json()).key;
+  var reg = await navigator.serviceWorker.ready;
+  var sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key)
+    });
+  }
+  var res = await fetch('/api/push/subscribe', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(sub.toJSON())
+  });
+  if (!res.ok) throw new Error('Could not save the subscription.');
+}
+
+window.pushEnable = async function() {
+  if (!pushSupported()) {
+    if (!isStandaloneApp()) {
+      pushShowGuidance('Install the app first: Share button \u2192 Add to Home Screen, then enable here.');
+    } else {
+      pushShowGuidance('Notifications are not supported in this browser.');
+    }
+    pushSetStatus('Unavailable');
+    return;
+  }
+  try {
+    var perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      pushSetStatus(perm === 'denied' ? 'Blocked' : 'Off');
+      if (perm === 'denied') pushShowGuidance('Notifications are blocked for this site. Allow them in your browser settings, then try again.');
+      return;
+    }
+    await pushSubscribeAndSave();
+    pushReflectEnabled(true);
+    pushNudgeHide();
+  } catch (e) {
+    pushSetStatus('Error', 'var(--red)');
+    pushShowGuidance((e && e.message) || 'Could not enable notifications.');
+  }
+};
+
+window.pushSendTest = async function() {
+  var btn = document.getElementById('notify-test-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  try {
+    var res = await fetch('/api/push/test', { method: 'POST' });
+    if (btn) btn.textContent = res.ok ? 'Test sent \u2713' : 'Test failed';
+  } catch (e) {
+    if (btn) btn.textContent = 'Test failed';
+  }
+  setTimeout(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Test Notification'; }
+  }, 2500);
+};
+
+async function initPushSection() {
+  if (!pushSupported()) { pushSetStatus(isStandaloneApp() ? 'Unsupported' : 'Install app first'); return; }
+  if (Notification.permission === 'denied') { pushSetStatus('Blocked'); return; }
+  if (Notification.permission !== 'granted') { pushSetStatus('Off'); return; }
+  try {
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if (!sub) { pushSetStatus('Off'); return; }
+    // Permission granted + live subscription: silently keep the server's copy fresh.
+    try {
+      await fetch('/api/push/subscribe', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(sub.toJSON())
+      });
+    } catch (e) {}
+    pushReflectEnabled(true);
+  } catch (e) { pushSetStatus('Off'); }
+}
+
+// One-time gentle nudge after the first successful catch of the session.
+var PUSH_NUDGE_LS_KEY = 'wh-push-nudge-dismissed';
+var _pushNudgeShown = false;
+
+function maybeShowPushNudge() {
+  try {
+    if (_pushNudgeShown) return;
+    if (!pushSupported() || Notification.permission !== 'default') return;
+    if (localStorage.getItem(PUSH_NUDGE_LS_KEY)) return;
+    var el = document.getElementById('push-nudge');
+    if (!el) return;
+    el.style.display = 'flex';
+    _pushNudgeShown = true;
+  } catch (e) {}
+}
+
+function pushNudgeHide() {
+  var el = document.getElementById('push-nudge');
+  if (el) el.style.display = 'none';
+}
+
+window.pushNudgeDismiss = function() {
+  try { localStorage.setItem(PUSH_NUDGE_LS_KEY, '1'); } catch (e) {}
+  pushNudgeHide();
+};
+
+window.pushNudgeEnable = function() {
+  pushNudgeHide();
+  pushEnable();
+};
+
+window.telegramLink = async function() {
+  var btn = document.getElementById('tg-link-btn');
+  var out = document.getElementById('tg-link-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Getting code...'; }
+  try {
+    var res = await fetch('/api/telegram/link-code', { method: 'POST' });
+    var data = await res.json();
+    if (!res.ok || data.error || !data.code) throw new Error(data.error || 'Could not get a link code.');
+    var code = String(data.code);
+    var bot = String(data.bot || '');
+    var html =
+      '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">YOUR LINK CODE</div>' +
+      '<div style="font-size:22px;font-weight:700;letter-spacing:4px;color:var(--accent);margin:8px 0;">' + escHtml(code) + '</div>';
+    if (bot) {
+      html +=
+        '<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">Open Telegram, find the bot <b style="color:var(--text-primary);">@' + escHtml(bot) + '</b>, send it: <b style="color:var(--text-primary);">/start ' + escHtml(code) + '</b></div>' +
+        '<a href="https://t.me/' + encodeURIComponent(bot) + '?start=' + encodeURIComponent(code) + '" target="_blank" rel="noopener" style="display:block;margin-top:10px;padding:10px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-family:inherit;font-size:13px;font-weight:700;text-align:center;">Open Telegram</a>';
+    } else {
+      html +=
+        '<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">Open Telegram, find the bot your captain set up, send it: <b style="color:var(--text-primary);">/start ' + escHtml(code) + '</b></div>';
+    }
+    if (out) { out.innerHTML = html; out.style.display = 'block'; }
+  } catch (e) {
+    if (out) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--red);">' + escHtml((e && e.message) || 'Could not get a link code. Try again.') + '</div>';
+      out.style.display = 'block';
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Link Telegram'; }
+};
+
 // ==================== INIT ====================
 if ('serviceWorker' in navigator) {
   try { navigator.serviceWorker.register('/sw.js').catch(function() {}); } catch (e) {}
 }
 setTimeout(function() { updateCatchQueueBadge(); syncCatchQueue(); }, 2500);
 initPhoneSection();
+initPushSection();
 pollNotifications();
 setInterval(pollNotifications, 30000);
 initSmsAdmin();

@@ -77,3 +77,31 @@ self.addEventListener('fetch', function(event) {
     );
   }
 });
+
+// ==================== WEB PUSH ====================
+self.addEventListener('push', function(event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  var title = (data && data.title) || 'Wheelhouse';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: (data && data.body) || '',
+      icon: '/static/nco_logo.jpg',
+      badge: '/static/nco_logo.jpg',
+      data: { url: (data && data.url) || '/' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(wins) {
+      for (var i = 0; i < wins.length; i++) {
+        if ('focus' in wins[i]) return wins[i].focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

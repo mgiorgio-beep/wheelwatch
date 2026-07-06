@@ -353,3 +353,14 @@ if __name__ == '__main__':
         print(body)
     else:
         send_email(body, verdict)
+        # Push/Telegram: verdict + first reason to everyone subscribed.
+        try:
+            from push_notify import notify_user, all_push_usernames
+            first_reason = next((l.strip('- ').strip() for l in body.splitlines()
+                                 if l.strip().startswith('-')), '')
+            for u in all_push_usernames():
+                notify_user(u, f'Wheelhouse {verdict} \u2014 {datetime.now().strftime("%b %d")}',
+                            first_reason[:180], url='/')
+            logger.info('Verdict pushed to subscribers')
+        except Exception as e:
+            logger.warning(f'briefing push skipped: {e}')

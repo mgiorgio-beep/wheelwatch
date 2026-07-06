@@ -6,3 +6,4 @@ paramiko
 twilio
 anthropic
 Pillow
+pywebpush

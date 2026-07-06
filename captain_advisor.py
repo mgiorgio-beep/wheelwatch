@@ -752,6 +752,11 @@ Rules:
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (group['id'], group['name'], username, member['username'],
                               entry.get('spot',''), entry.get('species',''), msg))
+                        try:
+                            from push_notify import notify_user
+                            notify_user(member['username'], f"\U0001F41F {group['name']}", msg)
+                        except Exception as e:
+                            logger.warning(f'push notify failed: {e}')
                 ndb.commit()
         except Exception as e:
             logger.error(f'Group notification failed: {e}')

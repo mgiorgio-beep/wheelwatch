@@ -672,6 +672,11 @@ def register_photo_catch_routes(app, login_required):
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (group['id'], group['name'], username, member['username'],
                               area_name or '', species, msg))
+                        try:
+                            from push_notify import notify_user
+                            notify_user(member['username'], f"\U0001F41F {group['name']}", msg)
+                        except Exception as e:
+                            logger.warning(f'push notify failed: {e}')
                 ndb.commit()
         except Exception as e:
             logger.error(f'Photo catch notification failed: {e}')
