@@ -55,15 +55,19 @@ def _with_budget(fn, seconds, label):
     """Run fn() with a hard time budget; None if it can't finish in time.
     The satellite (ERDDAP) endpoints in particular can stall for minutes —
     the briefing must never be hostage to one slow feed."""
+    ex = ThreadPoolExecutor(max_workers=1)
     try:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            return ex.submit(fn).result(timeout=seconds)
+        return ex.submit(fn).result(timeout=seconds)
     except FutureTimeout:
         logger.warning(f'{label} exceeded {seconds}s budget — skipped')
         return None
     except Exception as e:
         logger.warning(f'{label} failed: {e}')
         return None
+    finally:
+        # wait=False: never block on a stuck feed thread — it finishes (or
+        # dies with the process) in the background.
+        ex.shutdown(wait=False)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, 'wheelhouse.db')
