@@ -30,9 +30,11 @@ import os
 import sys
 import json
 import glob
+import socket
 import sqlite3
 import smtplib
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -44,6 +46,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger('wh-briefing')
+
+# Belt-and-suspenders: no network call may hang forever.
+socket.setdefaulttimeout(30)
+
+
+def _with_budget(fn, seconds, label):
+    """Run fn() with a hard time budget; None if it can't finish in time.
+    The satellite (ERDDAP) endpoints in particular can stall for minutes —
+    the briefing must never be hostage to one slow feed."""
+    try:
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(fn).result(timeout=seconds)
+    except FutureTimeout:
+        logger.warning(f'{label} exceeded {seconds}s budget — skipped')
+        return None
+    except Exception as e:
+        logger.warning(f'{label} failed: {e}')
+        return None
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, 'wheelhouse.db')
@@ -196,8 +216,9 @@ def build_briefing():
     # --- Wind for the morning window (05:00-13:00) from NWS hourly ---
     wind_kt = octant = None
     wind_timeline = []
+    logger.info('Fetching NWS wind forecast...')
     try:
-        wx = get_weather()
+        wx = _with_budget(get_weather, 45, 'NWS weather')
         for p in (wx or {}).get('hourly', [])[:9]:
             kt = parse_mph(p.get('windSpeed'))
             oc = compass_to_octant(p.get('windDirection'))
@@ -213,8 +234,9 @@ def build_briefing():
 
     # --- Buoy: pressure + temp ---
     pressure_mb = trend_mb = water_f = buoy_id = None
+    logger.info('Fetching buoy...')
     try:
-        buoy = get_buoy()
+        buoy = _with_budget(get_buoy, 45, 'buoy')
         obs = (buoy or {}).get('observation') or {}
         if obs.get('PRES') not in (None, 'MM'):
             pressure_mb = float(obs['PRES'])
@@ -227,8 +249,9 @@ def build_briefing():
 
     # --- Tides today ---
     tide_lines, tide_direction = [], None
+    logger.info('Fetching tides...')
     try:
-        tides = get_tides('chatham')
+        tides = _with_budget(lambda: get_tides('chatham'), 30, 'tides')
         now = datetime.now()
         nh = nl = None
         for p in (tides or {}).get('predictions', []):
@@ -266,8 +289,9 @@ def build_briefing():
             pressure_mb,
             'falling' if (trend_mb or 0) <= -1 else 'rising' if (trend_mb or 0) >= 1 else 'steady',
             ('%+.1fmb' % trend_mb) if trend_mb is not None else '?'))
+    logger.info('Fetching satellite SST/clarity (slowest feed, 90s budget)...')
     try:
-        erddap = get_erddap_conditions()
+        erddap = _with_budget(get_erddap_conditions, 90, 'ERDDAP satellite')
         g = (erddap or {}).get('temp_gradient')
         if g:
             L.append('  Temp break: %s' % g['summary'])
@@ -322,7 +346,9 @@ def send_email(body, verdict):
 
 
 if __name__ == '__main__':
+    logger.info('Building briefing...')
     body, verdict = build_briefing()
+    logger.info('Briefing assembled.')
     if '--print' in sys.argv:
         print(body)
     else:
