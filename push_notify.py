@@ -45,6 +45,10 @@ def ensure_tables():
             link_code TEXT,
             linked_at TIMESTAMP
         )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS notify_prefs (
+            username TEXT PRIMARY KEY,
+            channels TEXT NOT NULL DEFAULT 'both'
+        )''')
         db.commit()
 
 
@@ -185,16 +189,50 @@ def telegram_to_user(username, text):
         return False
 
 
+VALID_CHANNELS = ('both', 'push', 'telegram')
+
+
+def get_notify_pref(username):
+    """'both' (default) | 'push' | 'telegram'."""
+    try:
+        ensure_tables()
+        with sqlite3.connect(DB_PATH, timeout=15) as db:
+            row = db.execute('SELECT channels FROM notify_prefs WHERE username = ?',
+                             (username,)).fetchone()
+            if row and row[0] in VALID_CHANNELS:
+                return row[0]
+    except Exception as e:
+        logger.warning(f'notify pref read failed: {e}')
+    return 'both'
+
+
+def set_notify_pref(username, channels):
+    if channels not in VALID_CHANNELS:
+        return False
+    ensure_tables()
+    with sqlite3.connect(DB_PATH, timeout=15) as db:
+        db.execute('''INSERT INTO notify_prefs (username, channels) VALUES (?, ?)
+                      ON CONFLICT(username) DO UPDATE SET channels = excluded.channels''',
+                   (username, channels))
+        db.commit()
+    return True
+
+
 def notify_user(username, title, body, url='/'):
-    """Deliver an alert over every channel the user has. Never raises."""
-    try:
-        push_to_user(username, title, body, url=url)
-    except Exception as e:
-        logger.error(f'notify push failed: {e}')
-    try:
-        telegram_to_user(username, f'{title}\n{body}')
-    except Exception as e:
-        logger.error(f'notify telegram failed: {e}')
+    """Deliver an alert over the channels the user chose (default: both).
+    Never raises. Note: this governs ALERTS only — two-way advisor chat on
+    Telegram works regardless of this preference."""
+    pref = get_notify_pref(username)
+    if pref in ('both', 'push'):
+        try:
+            push_to_user(username, title, body, url=url)
+        except Exception as e:
+            logger.error(f'notify push failed: {e}')
+    if pref in ('both', 'telegram'):
+        try:
+            telegram_to_user(username, f'{title}\n{body}')
+        except Exception as e:
+            logger.error(f'notify telegram failed: {e}')
 
 
 def all_push_usernames():

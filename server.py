@@ -545,6 +545,19 @@ def api_push_test():
     return jsonify({'sent': n})
 
 
+@app.route('/api/notify/prefs', methods=['GET', 'POST'])
+@login_required
+def api_notify_prefs():
+    """Where alerts go: both | push | telegram. Advisor chat is unaffected."""
+    from push_notify import get_notify_pref, set_notify_pref
+    username = session.get('username', '')
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        if not set_notify_pref(username, (data.get('channels') or '').strip().lower()):
+            return jsonify({'error': 'channels must be both|push|telegram'}), 400
+    return jsonify({'channels': get_notify_pref(username)})
+
+
 @app.route('/api/telegram/link-code', methods=['POST'])
 @login_required
 def api_telegram_link_code():

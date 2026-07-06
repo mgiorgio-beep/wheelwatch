@@ -434,6 +434,14 @@ body {
 .catch-chip:active, .catch-chip.selected {
   background: var(--accent-dim); color: var(--accent);
 }
+.notify-seg {
+  flex: 1; background: var(--bg-primary); border: 1px solid var(--border-light);
+  border-radius: 10px; padding: 9px 0; font-family: inherit; font-size: 13px;
+  font-weight: 600; color: var(--text-muted); cursor: pointer;
+}
+.notify-seg.selected {
+  background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
+}
 .catch-select, .catch-input {
   width: 100%; background: var(--bg-card); border: none; border-radius: 10px;
   padding: 12px 14px; color: var(--text-primary);
@@ -1073,6 +1081,15 @@ body {
       <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Telegram</div>
       <button id="tg-link-btn" onclick="telegramLink()" style="width:100%;padding:11px 8px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-light);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">Link Telegram</button>
       <div id="tg-link-result" style="display:none;margin-top:10px;text-align:center;background:var(--bg-primary);border-radius:10px;padding:14px;"></div>
+      <div class="divider" style="margin:14px 0;"></div>
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Alert Delivery</div>
+      <div id="notify-channel-row" style="display:flex;gap:6px;">
+        <button class="notify-seg" data-chan="both" onclick="notifyChannelPick('both')">Both</button>
+        <button class="notify-seg" data-chan="push" onclick="notifyChannelPick('push')">Push</button>
+        <button class="notify-seg" data-chan="telegram" onclick="notifyChannelPick('telegram')">Telegram</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5;">Applies to alerts only — Telegram advisor chat always works.</div>
+      <div id="notify-chan-error" style="display:none;font-size:12px;color:var(--red);margin-top:6px;"></div>
     </div>
   </div>
 
@@ -4515,6 +4532,40 @@ window.telegramLink = async function() {
   if (btn) { btn.disabled = false; btn.textContent = 'Link Telegram'; }
 };
 
+function notifyChannelHighlight(chan) {
+  document.querySelectorAll('#notify-channel-row .notify-seg').forEach(function(b) {
+    b.classList.toggle('selected', b.getAttribute('data-chan') === chan);
+  });
+}
+
+async function initNotifyChannels() {
+  try {
+    var res = await fetch('/api/notify/prefs');
+    if (!res.ok) return;
+    var data = await res.json();
+    notifyChannelHighlight(data.channels || 'both');
+  } catch (e) {}
+}
+
+window.notifyChannelPick = async function(chan) {
+  var err = document.getElementById('notify-chan-error');
+  if (err) err.style.display = 'none';
+  try {
+    var res = await fetch('/api/notify/prefs', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ channels: chan })
+    });
+    if (!res.ok) throw new Error('Could not save the preference.');
+    notifyChannelHighlight(chan);
+  } catch (e) {
+    if (err) {
+      err.textContent = (e && e.message) || 'Could not save the preference.';
+      err.style.display = 'block';
+      setTimeout(function() { err.style.display = 'none'; }, 3000);
+    }
+  }
+};
+
 // ==================== INIT ====================
 if ('serviceWorker' in navigator) {
   try { navigator.serviceWorker.register('/sw.js').catch(function() {}); } catch (e) {}
@@ -4522,6 +4573,7 @@ if ('serviceWorker' in navigator) {
 setTimeout(function() { updateCatchQueueBadge(); syncCatchQueue(); }, 2500);
 initPhoneSection();
 initPushSection();
+initNotifyChannels();
 pollNotifications();
 setInterval(pollNotifications, 30000);
 initSmsAdmin();
