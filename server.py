@@ -460,6 +460,14 @@ def api_user_avatar_delete():
 
 # ==================== MAIN ROUTES ====================
 
+@app.route('/sw.js')
+def service_worker():
+    """Service worker must be served from the root scope to control the app."""
+    resp = send_from_directory('static', 'sw.js')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
 @app.route('/')
 @login_required
 def index():

@@ -550,6 +550,14 @@ def register_photo_catch_routes(app, login_required):
         taken_dt = _extract_exif_datetime(image_bytes) or \
             _client_capture_time(request.form.get('exif_time'))
         time_source = 'exif' if taken_dt else 'upload'
+        if taken_dt is None:
+            # Offline queue: the catch was saved on the boat and synced later.
+            # queued_at is when the captain hit Save — far closer to the truth
+            # than the upload time. Same validation window as EXIF times.
+            queued = _client_capture_time(request.form.get('queued_at'))
+            if queued is not None:
+                taken_dt = queued
+                time_source = 'queued'
         catch_dt = taken_dt or datetime.now()
 
         # Save photo

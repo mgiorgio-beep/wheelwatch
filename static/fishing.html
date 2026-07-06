@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/nco_logo.jpg">
 <title>Wheelhouse</title>
 <style>
 :root {
@@ -844,6 +846,8 @@ body {
 <div class="tab-panel" id="tab-catch">
   <div class="section-header">Log a Catch</div>
   <div id="catch-success-toast" class="catch-success-toast"></div>
+  <div id="catch-queue-badge" onclick="syncCatchQueue()"
+       style="display:none;background:rgba(255,159,10,0.15);color:var(--orange);border:1px solid var(--orange);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;"></div>
   <div id="catch-body">
     <div class="photo-catch-wrap">
       <div class="photo-catch-header">
@@ -1273,6 +1277,7 @@ window.switchTab = function(tab) {
     catchResetTimestamp();
     catchGetGps();
     loadCatchHistory();
+    updateCatchQueueBadge();
   }
   if (tab === 'tides' && window._lastTideData) {
     setTimeout(function() { drawTideChart(window._lastTideData); }, 100);
@@ -3351,10 +3356,52 @@ window.catchSave = function() {
     if (catchPhotoFile._wh_species_confidence) fd.append('species_confidence', catchPhotoFile._wh_species_confidence);
     if (catchPhotoFile._wh_size_confidence) fd.append('size_confidence', catchPhotoFile._wh_size_confidence);
     if (catchInstrumentFile) fd.append('instrument_photo', catchInstrumentFile);
+
+    // Offline path: stash the catch in IndexedDB and sync when signal returns.
+    var queueThisCatch = function() {
+      var rec = {
+        queued_at: catchQueueLocalIso(),
+        fields: {
+          spot: spot,
+          species: document.getElementById('catch-species').value,
+          technique: document.getElementById('catch-technique').value,
+          lure: document.getElementById('catch-lure').value.trim(),
+          notes: document.getElementById('catch-notes').value.trim()
+        },
+        photo: catchPhotoFile,
+        instrument: catchInstrumentFile || null
+      };
+      if (catchGps) { rec.fields.lat = String(catchGps.lat); rec.fields.lon = String(catchGps.lon); }
+      if (catchGpsSource) rec.fields.gps_source = catchGpsSource;
+      if (catchPhotoExifTime) rec.fields.exif_time = catchPhotoExifTime;
+      if (catchPhotoFile._wh_size_inches != null) rec.fields.size_inches = String(catchPhotoFile._wh_size_inches);
+      if (catchPhotoFile._wh_species_confidence) rec.fields.species_confidence = catchPhotoFile._wh_species_confidence;
+      if (catchPhotoFile._wh_size_confidence) rec.fields.size_confidence = catchPhotoFile._wh_size_confidence;
+      catchQueueAdd(rec).then(function() {
+        btn.textContent = 'Saved Offline'; btn.style.background = 'var(--green)';
+        var toast = document.getElementById('catch-success-toast');
+        if (toast) {
+          toast.textContent = "Saved offline — will sync when you're back in range";
+          toast.style.display = 'block';
+          setTimeout(function() { toast.style.display = 'none'; }, 4000);
+        }
+        updateCatchQueueBadge();
+        setTimeout(function() {
+          catchResetForm();
+          btn.style.background = '';
+        }, 1500);
+      }).catch(onErr);
+    };
+
+    if (!navigator.onLine) { queueThisCatch(); return; }
     fetch('/log-catch-photo', { method: 'POST', body: fd })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { if (data.error) onErr(); else onOk(); })
-      .catch(onErr);
+      .then(function(r) {
+        // HTTP responses (even errors) mean the server was reached — never queue those.
+        return r.json()
+          .catch(function() { return { error: 'HTTP ' + r.status }; })
+          .then(function(data) { if (data.error) onErr(); else onOk(); });
+      })
+      .catch(function() { queueThisCatch(); });  // fetch rejected = network failure
     return;
   }
 
@@ -3371,6 +3418,137 @@ window.catchSave = function() {
     .then(function(data) { if (data.error) onErr(); else onOk(); })
     .catch(onErr);
 };
+
+// ==================== OFFLINE CATCH QUEUE ====================
+// Catches saved with no signal land in IndexedDB and drain to /log-catch-photo
+// when the connection comes back. queued_at tells the server when the user
+// actually hit Save (used as the catch time when the photo has no EXIF time).
+var _catchSyncInFlight = false;
+
+function catchQueueOpenDb() {
+  return new Promise(function(resolve, reject) {
+    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    var req = indexedDB.open('wheelhouse', 1);
+    req.onupgradeneeded = function() {
+      var db = req.result;
+      if (!db.objectStoreNames.contains('catchQueue')) {
+        db.createObjectStore('catchQueue', { autoIncrement: true });
+      }
+    };
+    req.onsuccess = function() { resolve(req.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+
+function catchQueueTx(mode, fn) {
+  return catchQueueOpenDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction('catchQueue', mode);
+      var out = fn(tx.objectStore('catchQueue'));
+      tx.oncomplete = function() { db.close(); resolve(out.result !== undefined ? out.result : out); };
+      tx.onerror = function() { db.close(); reject(tx.error); };
+      tx.onabort = function() { db.close(); reject(tx.error); };
+    });
+  });
+}
+
+function catchQueueAdd(rec) {
+  return catchQueueTx('readwrite', function(store) { return store.add(rec); });
+}
+
+function catchQueueDelete(key) {
+  return catchQueueTx('readwrite', function(store) { return store.delete(key); });
+}
+
+function catchQueueCount() {
+  return catchQueueTx('readonly', function(store) { return store.count(); });
+}
+
+function catchQueueAll() {
+  return catchQueueOpenDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var items = [];
+      var tx = db.transaction('catchQueue', 'readonly');
+      var cur = tx.objectStore('catchQueue').openCursor();
+      cur.onsuccess = function() {
+        var c = cur.result;
+        if (c) { items.push({ key: c.key, value: c.value }); c.continue(); }
+      };
+      tx.oncomplete = function() { db.close(); resolve(items); };
+      tx.onerror = function() { db.close(); reject(tx.error); };
+    });
+  });
+}
+
+// Local wall-clock time, seconds precision, no timezone suffix: 2026-07-05T14:32:10
+function catchQueueLocalIso() {
+  var d = new Date();
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) +
+    'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+}
+
+function updateCatchQueueBadge() {
+  var el = document.getElementById('catch-queue-badge');
+  if (!el) return;
+  catchQueueCount().then(function(n) {
+    if (n > 0) {
+      el.textContent = '\u23F3 ' + n + (n === 1 ? ' catch' : ' catches') +
+        ' waiting to sync \u2014 tap to retry';
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  }).catch(function() {});
+}
+
+window.syncCatchQueue = function() {
+  if (_catchSyncInFlight) return;
+  _catchSyncInFlight = true;
+  var syncedAny = false;
+  catchQueueAll().then(function(items) {
+    items.sort(function(a, b) { return a.key < b.key ? -1 : 1; });  // oldest first
+    var i = 0;
+    function next() {
+      if (i >= items.length) return Promise.resolve();
+      var item = items[i++];
+      var rec = item.value || {};
+      var fd = new FormData();
+      fd.append('photo', rec.photo, 'catch.jpg');
+      var fields = rec.fields || {};
+      Object.keys(fields).forEach(function(k) {
+        var v = fields[k];
+        if (v !== null && v !== undefined && v !== '') fd.append(k, v);
+      });
+      if (rec.queued_at) fd.append('queued_at', rec.queued_at);
+      if (rec.instrument) fd.append('instrument_photo', rec.instrument, 'instrument.jpg');
+      return fetch('/log-catch-photo', { method: 'POST', body: fd }).then(function(r) {
+        if (r.status >= 400 && r.status < 500) {
+          console.warn('Queued catch rejected (HTTP ' + r.status + ') — dropping it');
+          return catchQueueDelete(item.key).then(next);
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);  // 5xx: keep record, stop draining
+        syncedAny = true;
+        return catchQueueDelete(item.key).then(next);
+      });
+    }
+    return next();
+  }).catch(function() {
+    // network failure or 5xx mid-drain — leave remaining records for next attempt
+  }).then(function() {
+    _catchSyncInFlight = false;
+    updateCatchQueueBadge();
+    if (syncedAny) {
+      _catchLogs = [];
+      if (activeTab === 'catch') loadCatchHistory();
+    }
+  });
+};
+
+window.addEventListener('online', function() { syncCatchQueue(); });
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') syncCatchQueue();
+});
 
 // Redraw charts on resize
 window.addEventListener('resize', function() {
@@ -4136,6 +4314,10 @@ window.flyToMember = function(lat, lon) {
 };
 
 // ==================== INIT ====================
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.register('/sw.js').catch(function() {}); } catch (e) {}
+}
+setTimeout(function() { updateCatchQueueBadge(); syncCatchQueue(); }, 2500);
 initPhoneSection();
 pollNotifications();
 setInterval(pollNotifications, 30000);
