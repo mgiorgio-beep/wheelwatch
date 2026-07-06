@@ -1048,51 +1048,65 @@ def get_ais_vessels():
 
 # ==================== CAPTAIN'S BRIEFING ====================
 
-def get_briefing():
-    """Compile a full captain's briefing with all data sources."""
+def get_briefing(deadline_s=25):
+    """Compile a full captain's briefing with all data sources.
+
+    All feeds are fetched IN PARALLEL under a shared deadline. Previously they
+    ran sequentially, so one slow upstream (ERDDAP regularly stalls) pushed the
+    request past gunicorn's 30s worker timeout — the worker got killed, and
+    with only 2 workers the whole app starved. Feeds that miss the deadline
+    come back None, which the UI already tolerates; the cache picks them up
+    on a later request."""
+    from concurrent.futures import ThreadPoolExecutor
+    import time as _time
+
+    tasks = {
+        'lunar': get_lunar,
+        'wave_spectral': get_wave_spectral,
+        'wind_history': get_continuous_wind,
+        'sst': get_sst_sources,
+        'visual': get_visual_satellite_sources,
+        'chlorophyll': get_chlorophyll_sources,
+        'weather': get_weather,
+        'buoy': get_buoy,
+        'nantucket_buoy': get_nantucket_buoy,
+        'spot_buoy': get_spot_buoy,
+        'tide_chart': lambda: get_tide_hourly('chatham', 48),
+        'erddap': get_erddap_conditions,
+        'ais': get_ais_vessels,
+    }
+    for key in STATIONS['tides']:
+        tasks[f'tides:{key}'] = (lambda k=key: get_tides(k))
+    for key in STATIONS['currents']:
+        tasks[f'currents:{key}'] = (lambda k=key: get_currents(k))
+
     briefing = {
         'generated': datetime.now().isoformat(),
         'tides': {},
         'currents': {},
         'weather': None,
         'buoy': None,
-        'lunar': get_lunar(),
-        'wave_spectral': get_wave_spectral(),
-        'wind_history': get_continuous_wind(),
-        'sst': get_sst_sources(),
-        'visual': get_visual_satellite_sources(),
-        'chlorophyll': get_chlorophyll_sources(),
     }
 
-    # Tides for both stations
-    for key in STATIONS['tides']:
-        briefing['tides'][key] = get_tides(key)
-
-    # Currents for both stations  
-    for key in STATIONS['currents']:
-        briefing['currents'][key] = get_currents(key)
-
-    # Weather
-    briefing['weather'] = get_weather()
-
-    # Buoy
-    briefing['buoy'] = get_buoy()
-
-    # Nantucket Sound buoy (44020)
-    briefing['nantucket_buoy'] = get_nantucket_buoy()
-
-    # WHOI Spotter buoy (Chatham)
-    briefing['spot_buoy'] = get_spot_buoy()
-
-    # Tide chart data
-    briefing['tide_chart'] = get_tide_hourly('chatham', 48)
-
-    # ERDDAP satellite SST & chlorophyll
-    briefing['erddap'] = get_erddap_conditions()
-
-    # AIS vessel tracking
-    briefing['ais'] = get_ais_vessels()
-
+    ex = ThreadPoolExecutor(max_workers=10)
+    futures = {name: ex.submit(fn) for name, fn in tasks.items()}
+    deadline = _time.time() + deadline_s
+    try:
+        for name, fut in futures.items():
+            try:
+                val = fut.result(timeout=max(0.1, deadline - _time.time()))
+            except Exception as e:
+                logger.warning(f'briefing feed {name} skipped: {type(e).__name__} {e}')
+                val = None
+            if name.startswith('tides:'):
+                briefing['tides'][name.split(':', 1)[1]] = val
+            elif name.startswith('currents:'):
+                briefing['currents'][name.split(':', 1)[1]] = val
+            else:
+                briefing[name] = val
+    finally:
+        # Never wait on stragglers — they finish in the background and warm the cache.
+        ex.shutdown(wait=False)
     return briefing
 
 
