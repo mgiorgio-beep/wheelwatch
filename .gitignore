@@ -10,3 +10,4 @@ catch_photos/
 static/fishing.html.backup*
 static/fishing.html.before-*
 vapid.json
+vapid_private.pem

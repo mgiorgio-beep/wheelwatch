@@ -26,6 +26,7 @@ logger = logging.getLogger('wh-notify')
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, 'wheelhouse.db')
 VAPID_PATH = os.path.join(BASE, 'vapid.json')
+VAPID_PEM_PATH = os.path.join(BASE, 'vapid_private.pem')
 VAPID_CLAIM_EMAIL = 'mailto:mgiorgio@rednun.com'
 
 
@@ -49,11 +50,24 @@ def ensure_tables():
 
 # ==================== VAPID KEYS ====================
 
+def _ensure_pem_file(keys):
+    """pywebpush wants the private key as a FILE PATH (a PEM string gets
+    misparsed as a raw base64 key -> 'ASN.1 parsing error'). Keep the PEM
+    materialized next to vapid.json."""
+    if not os.path.exists(VAPID_PEM_PATH):
+        with open(VAPID_PEM_PATH, 'w') as f:
+            f.write(keys['private_pem'])
+        os.chmod(VAPID_PEM_PATH, 0o600)
+    return VAPID_PEM_PATH
+
+
 def _load_or_create_vapid():
     """Persisted VAPID keypair; generated on first use."""
     if os.path.exists(VAPID_PATH):
         with open(VAPID_PATH) as f:
-            return json.load(f)
+            keys = json.load(f)
+        _ensure_pem_file(keys)
+        return keys
     from py_vapid import Vapid02, b64urlencode
     from cryptography.hazmat.primitives import serialization
     v = Vapid02()
@@ -65,6 +79,7 @@ def _load_or_create_vapid():
     with open(VAPID_PATH, 'w') as f:
         json.dump(keys, f)
     os.chmod(VAPID_PATH, 0o600)
+    _ensure_pem_file(keys)
     logger.info('Generated new VAPID keypair')
     return keys
 
@@ -112,7 +127,7 @@ def _send_webpush(subscription, payload):
         webpush(
             subscription_info=subscription,
             data=json.dumps(payload),
-            vapid_private_key=keys['private_pem'],
+            vapid_private_key=_ensure_pem_file(keys),
             vapid_claims={'sub': VAPID_CLAIM_EMAIL},
             timeout=10,
         )
