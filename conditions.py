@@ -51,7 +51,8 @@ def _latest_sst_trend():
         return None
 
 
-def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=None):
+def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=None,
+                              at=None):
     """
     Build the canonical catch-time conditions snapshot.
 
@@ -60,12 +61,16 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
         lat, lon        — catch position (also stored on the snapshot)
         depth_ft        — measured depth
         water_temp_f    — measured surface/water temp, overrides the buoy value
+        at              — datetime of the catch (e.g. photo EXIF time). Tide-relative
+                          fields are computed for this moment. Buoy/SST/lunar sources
+                          only report current values, so those remain "as of now" and
+                          may be slightly stale for older photos.
 
     Returns a dict with only the keys that could be resolved. Never raises.
     """
     from fishing_intel import get_erddap_conditions, get_buoy, get_tides, get_lunar
 
-    now = datetime.now()
+    now = at or datetime.now()
     cond = {}
 
     # --- Position / instrument-supplied fields ---
@@ -108,7 +113,10 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
 
     # --- Tide-relative fields (same math as logger.snapshot) ---
     try:
-        tides = get_tides('chatham')
+        if at is not None and at.date() != datetime.now().date():
+            tides = get_tides('chatham', begin=at.strftime('%Y%m%d'))
+        else:
+            tides = get_tides('chatham')
         preds = (tides or {}).get('predictions') or []
         prev_high = next_high = next_low = None
         for p in preds:
@@ -131,7 +139,7 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
 
         # Spring vs neap from moon illumination
         try:
-            lunar = get_lunar()
+            lunar = get_lunar(at=now)
             illum = lunar['illumination']
             cond['tide_strength'] = 'spring' if (illum < 15 or illum > 85) else 'neap'
         except Exception:
@@ -141,7 +149,7 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
 
     # --- Solunar / moon ---
     try:
-        lunar = get_lunar()
+        lunar = get_lunar(at=now)
         cond['moon_phase'] = lunar['phase_name']
         cond['moon_illumination'] = lunar['illumination']
         cond['solunar_rating'] = lunar['rating']

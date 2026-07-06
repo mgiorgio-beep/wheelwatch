@@ -364,6 +364,42 @@ def _extract_exif_gps(image_bytes):
         return (None, None)
 
 
+def _extract_exif_datetime(image_bytes):
+    """Pull the capture time from EXIF (DateTimeOriginal, falling back to
+    DateTimeDigitized, then DateTime). Returns a naive local datetime or None.
+    Must be called on the raw uploaded bytes — resize strips EXIF.
+    Rejects implausible values (future, or before 2000)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        exif = img.getexif()
+        if not exif:
+            return None
+        raw = None
+        # Exif sub-IFD (34665): 36867 DateTimeOriginal, 36868 DateTimeDigitized
+        try:
+            exif_ifd = exif.get_ifd(34665) if hasattr(exif, 'get_ifd') else {}
+            raw = exif_ifd.get(36867) or exif_ifd.get(36868)
+        except Exception:
+            pass
+        # IFD0 fallback: 306 DateTime
+        if not raw:
+            raw = exif.get(306)
+        if not raw:
+            return None
+        dt = datetime.strptime(str(raw).strip(), '%Y:%m:%d %H:%M:%S')
+        now = datetime.now()
+        if dt > now + timedelta(minutes=10) or dt.year < 2000:
+            return None
+        return dt
+    except Exception as e:
+        logger.debug(f'EXIF datetime extract failed: {e}')
+        return None
+
+
 # ==================== ROUTES ====================
 
 def register_photo_catch_routes(app, login_required):
@@ -390,6 +426,7 @@ def register_photo_catch_routes(app, login_required):
             parsed = _parse_photo_with_claude(image_bytes, media_type=media_type)
             exif_lat, exif_lon = _extract_exif_gps(image_bytes)
             exif_area = coords_to_area_name(exif_lat, exif_lon) if exif_lat is not None else None
+            exif_dt = _extract_exif_datetime(image_bytes)
             logger.info(f'Vision parse for {session.get("username","?")}: '
                         f'{parsed.get("species","?")} {parsed.get("size_inches","?")}in '
                         f'exif_gps={"yes" if exif_lat is not None else "no"}')
@@ -404,6 +441,7 @@ def register_photo_catch_routes(app, login_required):
                 'exif_lat': exif_lat,
                 'exif_lon': exif_lon,
                 'exif_area_name': exif_area,
+                'exif_time': exif_dt.isoformat() if exif_dt else None,
             })
         except Exception as e:
             logger.error(f'Vision parse failed: {e}')
@@ -449,6 +487,11 @@ def register_photo_catch_routes(app, login_required):
                 lat, lon = exif_lat, exif_lon
                 gps_source = 'exif'
         gps = {'lat': lat, 'lon': lon} if lat is not None and lon is not None else None
+
+        # Catch time: prefer the photo's EXIF capture time over upload time.
+        taken_dt = _extract_exif_datetime(image_bytes)
+        time_source = 'exif' if taken_dt else 'upload'
+        catch_dt = taken_dt or datetime.now()
 
         # Save photo
         username = session.get('username', 'unknown')
@@ -497,14 +540,16 @@ def register_photo_catch_routes(app, login_required):
         try:
             from conditions import build_conditions_snapshot
             conditions = build_conditions_snapshot(
-                lat=lat, lon=lon, depth_ft=garmin_depth, water_temp_f=garmin_temp)
+                lat=lat, lon=lon, depth_ft=garmin_depth, water_temp_f=garmin_temp,
+                at=catch_dt)
         except Exception as e:
             logger.warning(f'Conditions snapshot skipped: {e}')
 
         area_name = coords_to_area_name(lat, lon)
 
         entry = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': catch_dt.isoformat(),
+            'time_source': time_source,
             'logged_by': username,
             'spot': spot or (area_name or ''),
             'gps': gps,

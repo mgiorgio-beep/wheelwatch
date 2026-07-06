@@ -67,15 +67,16 @@ def _cached(key, ttl_key, fetcher):
 
 # ==================== TIDES ====================
 
-def get_tides(station_key='chatham', hours=48):
-    """Get hi/lo tide predictions from NOAA."""
+def get_tides(station_key='chatham', hours=48, begin=None):
+    """Get hi/lo tide predictions from NOAA. `begin` (YYYYMMDD) shifts the
+    window to another day, e.g. a catch backdated from photo EXIF time."""
     def fetch():
         station = STATIONS['tides'].get(station_key, STATIONS['tides']['chatham'])
-        now = datetime.now()
-        begin = now.strftime('%Y%m%d')
-        end = (now + timedelta(hours=hours)).strftime('%Y%m%d')
+        base = datetime.strptime(begin, '%Y%m%d') if begin else datetime.now()
+        begin_str = base.strftime('%Y%m%d')
+        end = (base + timedelta(hours=hours)).strftime('%Y%m%d')
         params = {
-            'begin_date': begin,
+            'begin_date': begin_str,
             'end_date': end,
             'station': station['id'],
             'product': 'predictions',
@@ -94,7 +95,8 @@ def get_tides(station_key='chatham', hours=48):
             'predictions': preds,
             'fetched': datetime.now().isoformat(),
         }
-    return _cached(f'tides_{station_key}', 'tides', fetch)
+    cache_key = f'tides_{station_key}_{begin}' if begin else f'tides_{station_key}'
+    return _cached(cache_key, 'tides', fetch)
 
 
 def get_tide_hourly(station_key='chatham', hours=48):
@@ -560,9 +562,10 @@ def get_chlorophyll_sources():
 
 # ==================== LUNAR / SOLUNAR ====================
 
-def get_lunar():
-    """Calculate moon phase and solunar feeding periods."""
-    now = datetime.now()
+def get_lunar(at=None):
+    """Calculate moon phase and solunar feeding periods. Pass `at` to compute
+    for a historical moment (e.g. photo EXIF capture time)."""
+    now = at or datetime.now()
 
     # Moon phase calculation (Metonic cycle approximation)
     # Reference new moon: Jan 6, 2000 18:14 UTC
