@@ -86,8 +86,8 @@ self.addEventListener('push', function(event) {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: (data && data.body) || '',
-      icon: '/static/nco_logo.jpg',
-      badge: '/static/nco_logo.jpg',
+      icon: '/static/icon-192.png',
+      badge: '/static/icon-192.png',
       data: { url: (data && data.url) || '/' }
     })
   );
