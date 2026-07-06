@@ -29,7 +29,7 @@ error and is skipped, never penalized, by the matcher):
 import sqlite3
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger('wh-conditions')
 
@@ -51,6 +51,35 @@ def _latest_sst_trend():
         return None
 
 
+def _nearest_logged_conditions(at, max_hours=6):
+    """Nearest conditions_log row to `at`, within max_hours. Used for backdated
+    catches (photo EXIF time) where live buoy/satellite reads would be wrong.
+    Returns a sqlite3.Row or None."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+        days = [(at + timedelta(days=d)).strftime('%Y-%m-%d') for d in (-1, 0, 1)]
+        rows = db.execute(
+            "SELECT date, snapshot_hour, water_temp_f, sst_gradient_f, sst_trend "
+            "FROM conditions_log WHERE date IN (?, ?, ?)", days).fetchall()
+        db.close()
+        best, best_diff = None, None
+        for r in rows:
+            try:
+                row_dt = datetime.strptime(r['date'], '%Y-%m-%d').replace(
+                    hour=int(r['snapshot_hour'] if r['snapshot_hour'] is not None else 6))
+            except (TypeError, ValueError):
+                continue
+            diff = abs((row_dt - at).total_seconds()) / 3600
+            if best_diff is None or diff < best_diff:
+                best, best_diff = r, diff
+        if best is not None and best_diff <= max_hours:
+            return best
+    except Exception as e:
+        logger.debug(f'nearest logged conditions lookup failed: {e}')
+    return None
+
+
 def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=None,
                               at=None):
     """
@@ -61,16 +90,21 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
         lat, lon        — catch position (also stored on the snapshot)
         depth_ft        — measured depth
         water_temp_f    — measured surface/water temp, overrides the buoy value
-        at              — datetime of the catch (e.g. photo EXIF time). Tide-relative
-                          fields are computed for this moment. Buoy/SST/lunar sources
-                          only report current values, so those remain "as of now" and
-                          may be slightly stale for older photos.
+        at              — datetime of the catch (e.g. photo EXIF time). Tide and
+                          moon fields are computed for this moment. If `at` is more
+                          than 3h from now, water temp / SST gradient / SST trend come
+                          from the nearest conditions_log snapshot (within 6h) instead
+                          of live feeds; omitted if no snapshot is near enough.
 
     Returns a dict with only the keys that could be resolved. Never raises.
     """
     from fishing_intel import get_erddap_conditions, get_buoy, get_tides, get_lunar
 
     now = at or datetime.now()
+    # Backdated catch? Live buoy/satellite values would be wrong; use the
+    # nearest logged snapshot instead (or omit those fields entirely).
+    historical = at is not None and abs((datetime.now() - at).total_seconds()) > 3 * 3600
+    hist_row = _nearest_logged_conditions(at) if historical else None
     cond = {}
 
     # --- Position / instrument-supplied fields ---
@@ -83,16 +117,21 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
 
     # --- SST gradient (temp break strength) ---
     try:
-        erddap = get_erddap_conditions()
-        gradient = (erddap or {}).get('temp_gradient')
-        if gradient and gradient.get('difference_f') is not None:
-            cond['sst_gradient_f'] = gradient['difference_f']
+        if historical:
+            if hist_row is not None and hist_row['sst_gradient_f'] is not None:
+                cond['sst_gradient_f'] = hist_row['sst_gradient_f']
+        else:
+            erddap = get_erddap_conditions()
+            gradient = (erddap or {}).get('temp_gradient')
+            if gradient and gradient.get('difference_f') is not None:
+                cond['sst_gradient_f'] = gradient['difference_f']
     except Exception as e:
         logger.debug(f'conditions: SST gradient skipped: {e}')
 
     # --- SST trend (needs history; reuse logger's daily computation) ---
     try:
-        trend = _latest_sst_trend()
+        trend = (hist_row['sst_trend'] if hist_row is not None else None) \
+            if historical else _latest_sst_trend()
         if trend:
             cond['sst_trend'] = trend
     except Exception as e:
@@ -102,6 +141,9 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
     try:
         if water_temp_f is not None:
             cond['water_temp_f'] = round(float(water_temp_f), 1)
+        elif historical:
+            if hist_row is not None and hist_row['water_temp_f'] is not None:
+                cond['water_temp_f'] = round(float(hist_row['water_temp_f']), 1)
         else:
             buoy = get_buoy()
             obs = (buoy or {}).get('observation') or {}

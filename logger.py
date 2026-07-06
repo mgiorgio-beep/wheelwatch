@@ -1,6 +1,9 @@
 """
-Wheelhouse Conditions Logger — runs 3x daily via cron (6 AM, noon, 6 PM).
+Wheelhouse Conditions Logger — runs hourly via cron (each row records its
+snapshot_hour; trend queries compare against the previous row at the same hour).
 Snapshots SST, chlorophyll, tides (tide-relative), buoy, solunar, and weather to SQLite.
+Hourly rows let backdated catches (photo EXIF time) pull real historical
+water temp / SST from conditions_log instead of live reads.
 """
 
 import os, sys, sqlite3, logging, math
