@@ -1956,7 +1956,7 @@ def api_feed_status():
         else:
             feeds.append({'name': name, 'status': 'no data', 'age': 'not yet fetched'})
 
-    check_feed('NDBC Buoy 44018 (SE Cape Cod)', 'buoy_44018', 900)
+    check_feed('NDBC Buoy (nearest to grounds — auto)', 'buoy_pri_auto_41.5_-70.0', 900)
     check_feed('NDBC Buoy 44020 (Nantucket Sound)', 'buoy_44020', 900)
     check_feed('WHOI Spotter (Chatham)', 'spot_buoy', 900)
     check_feed('NDBC Buoy 44090 (Cape Cod Bay)', 'buoy_44090', 900)

@@ -163,7 +163,8 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
                 if _row_get(hist_row, k) is not None:
                     cond[k] = hist_row[k]
         else:
-            buoy = get_buoy()
+            # Nearest reporting buoy to the catch position (home grounds if none).
+            buoy = get_buoy(lat=lat, lon=lon)
             obs = (buoy or {}).get('observation') or {}
             wtmp = obs.get('WTMP')
             if wtmp and wtmp != 'MM' and water_temp_f is None:
@@ -175,6 +176,8 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
                 cond['pressure_trend'] = buoy['pressure_trend']
             if (buoy or {}).get('station'):
                 cond['buoy_id'] = buoy['station']
+            if (buoy or {}).get('distance_nm') is not None:
+                cond['buoy_distance_nm'] = buoy['distance_nm']
         if water_temp_f is not None:
             # Garmin/instrument override always wins for temp.
             cond['water_temp_f'] = round(float(water_temp_f), 1)

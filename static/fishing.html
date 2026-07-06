@@ -1524,7 +1524,8 @@ function renderBuoy(buoy) {
     '<div style="font-size:11px;color:#8E8E93;margin-top:10px;font-style:italic;line-height:1.4">' +
     'Station not reporting &mdash; NDBC shows no data for 45+ days. May be offline for maintenance.</div>';
   return '<div class="fi-card" style="opacity:' + opacity + '"><div class="fi-card-header">' +
-    '<div class="fi-card-title">Buoy 44018 -- SE Cape Cod</div>' +
+    '<div class="fi-card-title">Buoy ' + (buoy.station || '?') + ' -- ' +
+      ({'44020':'Nantucket Sound','44090':'Cape Cod Bay','44018':'North of Provincetown'}[buoy.station] || 'NDBC') + '</div>' +
     badge + '</div>' +
     '<div class="fi-card-body"><div class="fi-buoy-grid">' +
     buoyItem(waterTemp, 'WATER TEMP') +
@@ -2519,7 +2520,7 @@ window.condOpen = function(cut) {
     }
     if (_lastBriefing.buoy && _lastBriefing.buoy.observation) {
       var obs = _lastBriefing.buoy.observation;
-      html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin:10px 0 6px;letter-spacing:0.5px;">BUOY 44018</div>';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin:10px 0 6px;letter-spacing:0.5px;">BUOY ' + (_lastBriefing.buoy.station || '') + '</div>';
       var waterTemp = obs.WTMP ? (parseFloat(obs.WTMP) * 9/5 + 32).toFixed(1) + 'F' : '--';
       var windSpd = obs.WSPD ? (parseFloat(obs.WSPD) * 1.944).toFixed(0) + ' kt' : '--';
       var windDir = obs.WDIR || '--';

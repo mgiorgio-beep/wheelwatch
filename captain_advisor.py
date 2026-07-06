@@ -248,7 +248,9 @@ def get_live_data_context():
         gst = obs.get('GST', 'N/A')
         dpd = obs.get('DPD', 'N/A')
         mwd = obs.get('MWD', 'N/A')
-        ctx.append(f"BUOY 44018 (SE Cape Cod):")
+        _bnames = {'44020': 'Nantucket Sound', '44090': 'Cape Cod Bay', '44018': 'North of Provincetown'}
+        _bid = buoy.get('station', '?')
+        ctx.append(f"BUOY {_bid} ({_bnames.get(_bid, 'NDBC')}):")
         ctx.append(f"  Water temp: {water_f}°F")
         ctx.append(f"  Waves: {wvht}ft @ {dpd}s, direction from {mwd}°")
         ctx.append(f"  Wind: {wdir}° at {wspd}m/s, gusts {gst}m/s")

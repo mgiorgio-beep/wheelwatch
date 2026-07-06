@@ -254,15 +254,59 @@ def classify_pressure_trend(delta_mb):
     return 'steady'
 
 
-def get_buoy(station='44018'):
-    """Get latest observations from NDBC buoy. Tries the last buoy that
-    answered first, then falls back through the list. Result carries the
-    station id ('station') and 3h pressure trend so downstream consumers
-    can record provenance."""
+# NDBC stations with their ACTUAL moored positions. 44018 was relocated to
+# north of Provincetown years ago — distance-aware selection below exists so
+# a stale assumption about where a buoy lives can never again decide whose
+# water temp we log. Update coords here if NOAA moves a station.
+BUOYS = {
+    '44020': {'name': 'Nantucket Sound',       'lat': 41.443, 'lon': -70.186},
+    '44090': {'name': 'Cape Cod Bay',          'lat': 41.840, 'lon': -70.329},
+    '44018': {'name': 'North of Provincetown', 'lat': 42.203, 'lon': -70.154},
+}
+BUOY_NAMES = {k: v['name'] for k, v in BUOYS.items()}
+
+# Center of the home grounds (Monomoy/Stonehorse) — default distance target.
+GROUNDS_LAT, GROUNDS_LON = 41.55, -69.98
+
+
+def _haversine_nm(lat1, lon1, lat2, lon2):
+    r_nm = 3440.065
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return r_nm * 2 * math.asin(math.sqrt(a))
+
+
+def buoys_by_distance(lat=None, lon=None):
+    """Station ids nearest-first to (lat, lon), defaulting to the home grounds."""
+    tl = lat if lat is not None else GROUNDS_LAT
+    tn = lon if lon is not None else GROUNDS_LON
+    return sorted(BUOYS, key=lambda s: _haversine_nm(tl, tn, BUOYS[s]['lat'], BUOYS[s]['lon']))
+
+
+def get_buoy(station=None, lat=None, lon=None):
+    """Get latest observations from the best NDBC buoy.
+
+    Selection logic (nearest wins, dead stations fall through):
+      - lat/lon given (e.g. a catch position): stations tried nearest-first
+        to THAT point, so an inside-Sound catch and a backside catch can use
+        different buoys.
+      - no position: nearest-first to the Monomoy/Stonehorse home grounds
+        (44020 Nantucket Sound today — computed, not assumed).
+      - explicit station: honored first, then distance order.
+
+    Result carries provenance: 'station', 'station_name', 'distance_nm' from
+    the target, plus the 3h pressure trend."""
+    tl = lat if lat is not None else GROUNDS_LAT
+    tn = lon if lon is not None else GROUNDS_LON
+
     def fetch():
         global _LAST_GOOD_BUOY
-        stations_to_try = [station, '44020', '44090']
-        if _LAST_GOOD_BUOY in stations_to_try:
+        stations_to_try = buoys_by_distance(tl, tn)
+        if station in BUOYS:
+            stations_to_try.remove(station)
+            stations_to_try.insert(0, station)
+        if _LAST_GOOD_BUOY in stations_to_try[:2]:
             stations_to_try.remove(_LAST_GOOD_BUOY)
             stations_to_try.insert(0, _LAST_GOOD_BUOY)
         for stn in stations_to_try:
@@ -284,6 +328,8 @@ def get_buoy(station='44018'):
                 _LAST_GOOD_BUOY = stn
                 return {
                     'station': stn,
+                    'station_name': BUOY_NAMES.get(stn, 'NDBC'),
+                    'distance_nm': round(_haversine_nm(tl, tn, BUOYS[stn]['lat'], BUOYS[stn]['lon']), 1) if stn in BUOYS else None,
                     'observation': obs,
                     'pressure_trend_mb_3h': trend_mb,
                     'pressure_trend': classify_pressure_trend(trend_mb),
@@ -293,7 +339,11 @@ def get_buoy(station='44018'):
                 logger.warning(f'Buoy {stn} failed: {e}, trying next...')
                 continue
         return None
-    return _cached(f'buoy_{station}', 'buoy', fetch)
+    # 'buoy_pri_' namespace: get_nantucket_buoy already owns the 'buoy_44020' key.
+    # Key includes the target cell (~6nm grid) so nearby positions share cache
+    # but Sound-side vs backside can resolve to different stations.
+    key = f'buoy_pri_{station or "auto"}_{round(tl, 1)}_{round(tn, 1)}'
+    return _cached(key, 'buoy', fetch)
 
 
 # ==================== NANTUCKET SOUND BUOY (44020) ====================
@@ -1091,7 +1141,7 @@ def register_routes(app, login_required):
     @app.route('/api/fishing/buoy')
     @login_required
     def api_fishing_buoy():
-        station = request.args.get('station', '44018')
+        station = request.args.get('station', '44020')
         data = get_buoy(station)
         return jsonify(data) if data else jsonify({'error': 'unavailable'}), 503
 
