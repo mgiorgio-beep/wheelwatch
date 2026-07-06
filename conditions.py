@@ -19,6 +19,10 @@ error and is skipped, never penalized, by the matcher):
     sst_gradient_f           float
     sst_trend                str   strengthening | weakening | stable
     water_temp_f             float   <-- the ONE canonical temp key
+    pressure_mb              float
+    pressure_trend           str   rising | falling | steady (3h barometric)
+    buoy_id                  str   which NDBC buoy supplied temp/pressure
+    kd490                    float water clarity (higher = murkier)
     moon_phase               str
     moon_illumination        int
     solunar_rating           str
@@ -60,8 +64,7 @@ def _nearest_logged_conditions(at, max_hours=6):
         db.row_factory = sqlite3.Row
         days = [(at + timedelta(days=d)).strftime('%Y-%m-%d') for d in (-1, 0, 1)]
         rows = db.execute(
-            "SELECT date, snapshot_hour, water_temp_f, sst_gradient_f, sst_trend "
-            "FROM conditions_log WHERE date IN (?, ?, ?)", days).fetchall()
+            "SELECT * FROM conditions_log WHERE date IN (?, ?, ?)", days).fetchall()
         db.close()
         best, best_diff = None, None
         for r in rows:
@@ -78,6 +81,14 @@ def _nearest_logged_conditions(at, max_hours=6):
     except Exception as e:
         logger.debug(f'nearest logged conditions lookup failed: {e}')
     return None
+
+
+def _row_get(row, key):
+    """sqlite3.Row.get() — None when the column doesn't exist (old DBs)."""
+    try:
+        return row[key] if row is not None and key in row.keys() else None
+    except Exception:
+        return None
 
 
 def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=None,
@@ -118,20 +129,26 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
     # --- SST gradient (temp break strength) ---
     try:
         if historical:
-            if hist_row is not None and hist_row['sst_gradient_f'] is not None:
+            if _row_get(hist_row, 'sst_gradient_f') is not None:
                 cond['sst_gradient_f'] = hist_row['sst_gradient_f']
+            if _row_get(hist_row, 'kd490') is not None:
+                cond['kd490'] = hist_row['kd490']
         else:
             erddap = get_erddap_conditions()
             gradient = (erddap or {}).get('temp_gradient')
             if gradient and gradient.get('difference_f') is not None:
                 cond['sst_gradient_f'] = gradient['difference_f']
+            clarity = (erddap or {}).get('water_clarity') or {}
+            for key in ('stonehorse', 'sound_side', 'east_atlantic'):
+                if key in clarity and clarity[key].get('kd490') is not None:
+                    cond['kd490'] = clarity[key]['kd490']
+                    break
     except Exception as e:
         logger.debug(f'conditions: SST gradient skipped: {e}')
 
     # --- SST trend (needs history; reuse logger's daily computation) ---
     try:
-        trend = (hist_row['sst_trend'] if hist_row is not None else None) \
-            if historical else _latest_sst_trend()
+        trend = _row_get(hist_row, 'sst_trend') if historical else _latest_sst_trend()
         if trend:
             cond['sst_trend'] = trend
     except Exception as e:
@@ -139,17 +156,28 @@ def build_conditions_snapshot(lat=None, lon=None, depth_ft=None, water_temp_f=No
 
     # --- Water temp from buoy (override wins) ---
     try:
-        if water_temp_f is not None:
-            cond['water_temp_f'] = round(float(water_temp_f), 1)
-        elif historical:
-            if hist_row is not None and hist_row['water_temp_f'] is not None:
+        if historical:
+            if _row_get(hist_row, 'water_temp_f') is not None and water_temp_f is None:
                 cond['water_temp_f'] = round(float(hist_row['water_temp_f']), 1)
+            for k in ('pressure_mb', 'pressure_trend', 'buoy_id'):
+                if _row_get(hist_row, k) is not None:
+                    cond[k] = hist_row[k]
         else:
             buoy = get_buoy()
             obs = (buoy or {}).get('observation') or {}
             wtmp = obs.get('WTMP')
-            if wtmp and wtmp != 'MM':
+            if wtmp and wtmp != 'MM' and water_temp_f is None:
                 cond['water_temp_f'] = round(float(wtmp) * 9 / 5 + 32, 1)
+            pres = obs.get('PRES')
+            if pres and pres != 'MM':
+                cond['pressure_mb'] = round(float(pres), 1)
+            if (buoy or {}).get('pressure_trend'):
+                cond['pressure_trend'] = buoy['pressure_trend']
+            if (buoy or {}).get('station'):
+                cond['buoy_id'] = buoy['station']
+        if water_temp_f is not None:
+            # Garmin/instrument override always wins for temp.
+            cond['water_temp_f'] = round(float(water_temp_f), 1)
     except Exception as e:
         logger.debug(f'conditions: water temp skipped: {e}')
 

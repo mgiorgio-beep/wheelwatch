@@ -56,6 +56,10 @@ def init_table():
         "ALTER TABLE conditions_log ADD COLUMN tide_strength TEXT",
         "ALTER TABLE conditions_log ADD COLUMN sst_trend TEXT",
         "ALTER TABLE conditions_log ADD COLUMN chl_trend TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN pressure_mb REAL",
+        "ALTER TABLE conditions_log ADD COLUMN pressure_trend TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN buoy_id TEXT",
+        "ALTER TABLE conditions_log ADD COLUMN kd490 REAL",
     ]:
         try:
             db.execute(col)
@@ -81,6 +85,11 @@ def snapshot():
         row['sst_gradient_f'] = gradient['difference_f'] if gradient else None
         for key in ('sound_side', 'stonehorse', 'east_atlantic'):
             row[f'chl_{key}'] = chl.get(key, {}).get('chlor_a')
+        clarity = erddap.get('water_clarity', {})
+        for key in ('stonehorse', 'sound_side', 'east_atlantic'):
+            if clarity.get(key, {}).get('kd490') is not None:
+                row['kd490'] = clarity[key]['kd490']
+                break
         sources = [chl[k]['source'] for k in chl]
         row['chl_source'] = sources[0] if sources else None
         logger.info(f'ERDDAP: gradient={row.get("sst_gradient_f")}F')
@@ -149,7 +158,13 @@ def snapshot():
             row['wind_speed_kt'] = round(wspd * 1.944, 1) if wspd else None
             wdir = sf(obs.get('WDIR'))
             row['wind_direction'] = int(wdir) if wdir else None
-        logger.info(f'Buoy: water={row.get("water_temp_f")}F waves={row.get("wave_height_ft")}ft')
+            pres = sf(obs.get('PRES'))
+            row['pressure_mb'] = round(pres, 1) if pres else None
+            row['pressure_trend'] = buoy.get('pressure_trend')
+            row['buoy_id'] = buoy.get('station')
+        logger.info(f'Buoy: water={row.get("water_temp_f")}F waves={row.get("wave_height_ft")}ft '
+                    f'pres={row.get("pressure_mb")}mb ({row.get("pressure_trend") or "?"}) '
+                    f'via {row.get("buoy_id") or "?"}')
     except Exception as e:
         logger.error(f'Buoy failed: {e}')
 

@@ -194,11 +194,77 @@ def get_weather():
 
 # ==================== BUOY DATA ====================
 
+# Remembered across calls so a dead buoy (e.g. 44018 pulled for maintenance)
+# doesn't burn a timeout on every fetch — the last buoy that answered goes first.
+_LAST_GOOD_BUOY = None
+
+
+def _pressure_trend_3h(headers, lines):
+    """Compute the 3h barometric change (hPa/mb) from an NDBC realtime2 file.
+    Rows are newest-first, ~10min or 1h apart. Returns float or None."""
+    try:
+        if 'PRES' not in headers:
+            return None
+        pi = headers.index('PRES')
+
+        def row_pres(cols):
+            if len(cols) <= pi or cols[pi] == 'MM':
+                return None
+            return float(cols[pi])
+
+        def row_dt(cols):
+            return datetime(int(cols[0]), int(cols[1]), int(cols[2]),
+                            int(cols[3]), int(cols[4]))
+
+        latest = lines[2].split()
+        p_now = row_pres(latest)
+        if p_now is None:
+            return None
+        t_now = row_dt(latest)
+        best = None  # (abs offset from 3h, pressure)
+        for line in lines[3:60]:
+            cols = line.split()
+            try:
+                age_h = (t_now - row_dt(cols)).total_seconds() / 3600
+            except (ValueError, IndexError):
+                continue
+            if age_h < 2 or age_h > 4.5:
+                continue
+            pv = row_pres(cols)
+            if pv is None:
+                continue
+            off = abs(age_h - 3)
+            if best is None or off < best[0]:
+                best = (off, pv)
+        if best is None:
+            return None
+        return round(p_now - best[1], 1)
+    except Exception:
+        return None
+
+
+def classify_pressure_trend(delta_mb):
+    """NWS convention-ish: >=1 hPa over 3h is a meaningful move."""
+    if delta_mb is None:
+        return None
+    if delta_mb >= 1.0:
+        return 'rising'
+    if delta_mb <= -1.0:
+        return 'falling'
+    return 'steady'
+
+
 def get_buoy(station='44018'):
-    """Get latest observations from NDBC buoy. Falls back to 44020 if primary is down."""
+    """Get latest observations from NDBC buoy. Tries the last buoy that
+    answered first, then falls back through the list. Result carries the
+    station id ('station') and 3h pressure trend so downstream consumers
+    can record provenance."""
     def fetch():
-        # Try primary station, fall back to alternates
+        global _LAST_GOOD_BUOY
         stations_to_try = [station, '44020', '44090']
+        if _LAST_GOOD_BUOY in stations_to_try:
+            stations_to_try.remove(_LAST_GOOD_BUOY)
+            stations_to_try.insert(0, _LAST_GOOD_BUOY)
         for stn in stations_to_try:
             try:
                 url = f'https://www.ndbc.noaa.gov/data/realtime2/{stn}.txt'
@@ -214,9 +280,13 @@ def get_buoy(station='44018'):
                     if i < len(latest):
                         val = latest[i]
                         obs[h] = None if val == 'MM' else val
+                trend_mb = _pressure_trend_3h(headers, lines)
+                _LAST_GOOD_BUOY = stn
                 return {
                     'station': stn,
                     'observation': obs,
+                    'pressure_trend_mb_3h': trend_mb,
+                    'pressure_trend': classify_pressure_trend(trend_mb),
                     'fetched': datetime.now().isoformat(),
                 }
             except Exception as e:
@@ -765,6 +835,7 @@ def get_erddap_conditions():
     def fetch():
         sst_data = {}
         chla_data = {}
+        kd_data = {}
 
         for key, pt in MONOMOY_POINTS.items():
             try:
@@ -794,6 +865,24 @@ def get_erddap_conditions():
                         break
                 except Exception as e:
                     logger.warning(f'Chlorophyll {dataset} failed for {key}: {e}')
+
+        # Water clarity (Kd490 diffuse attenuation — higher = murkier water).
+        # Same MODIS source family as chlorophyll; drives lure color / visibility.
+        for key in ('sound_side', 'stonehorse', 'east_atlantic'):
+            pt = MONOMOY_POINTS[key]
+            for dataset in ('erdMH1kd4901day', 'erdMH1kd4908day'):
+                try:
+                    kd = _fetch_erddap_point(dataset, 'k490', pt['lat'], pt['lon'], delta=0.1,
+                                             valid_range=(0, 10))
+                    if kd is not None:
+                        kd_data[key] = {
+                            'name': pt['name'],
+                            'kd490': round(kd, 3),
+                            'source': '1-day' if '1day' in dataset else '8-day composite',
+                        }
+                        break
+                except Exception as e:
+                    logger.warning(f'Kd490 {dataset} failed for {key}: {e}')
 
         gradient = None
         if 'sound_side' in sst_data and 'east_atlantic' in sst_data:
@@ -834,6 +923,7 @@ def get_erddap_conditions():
         return {
             'sst': sst_data,
             'chlorophyll': chla_data,
+            'water_clarity': kd_data,
             'temp_gradient': gradient,
             'corridor_gradient': corridor_gradient,
             'fetched': datetime.now().isoformat(),
