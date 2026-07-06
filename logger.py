@@ -31,7 +31,7 @@ logger = logging.getLogger('wh-logger')
 
 
 def init_table():
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=15)
     db.execute('''CREATE TABLE IF NOT EXISTS conditions_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
@@ -89,7 +89,7 @@ def snapshot():
 
     # SST trend — compare to previous snapshot at same hour
     try:
-        db_check = sqlite3.connect(DB_PATH)
+        db_check = sqlite3.connect(DB_PATH, timeout=15)
         db_check.row_factory = sqlite3.Row
         yesterday = db_check.execute('''
             SELECT sst_gradient_f FROM conditions_log
@@ -112,7 +112,7 @@ def snapshot():
 
     # Chlorophyll trend
     try:
-        db_check = sqlite3.connect(DB_PATH)
+        db_check = sqlite3.connect(DB_PATH, timeout=15)
         db_check.row_factory = sqlite3.Row
         yesterday_chl = db_check.execute('''
             SELECT chl_stonehorse FROM conditions_log
@@ -256,7 +256,7 @@ def snapshot():
         logger.error(f'Weather failed: {e}')
 
     # Write to DB
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=15)
     cols = ', '.join(row.keys())
     placeholders = ', '.join(['?' for _ in row])
     db.execute(f'INSERT INTO conditions_log ({cols}) VALUES ({placeholders})', list(row.values()))

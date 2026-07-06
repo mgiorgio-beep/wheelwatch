@@ -44,7 +44,11 @@ os.makedirs(INSTRUMENT_DIR, exist_ok=True)
 
 def _ensure_posts_table():
     """Create the posts table if it doesn't exist. Idempotent — safe to call on every request."""
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(DB_PATH, timeout=15) as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS photo_owners (
+            filename TEXT PRIMARY KEY,
+            username TEXT NOT NULL
+        )''')
         db.execute('''CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
@@ -364,11 +368,37 @@ def _extract_exif_gps(image_bytes):
         return (None, None)
 
 
+EXIF_MAX_AGE_DAYS = 14
+
+
+def _validate_capture_time(dt):
+    """Clamp a claimed capture time: no future, no older than EXIF_MAX_AGE_DAYS.
+    Returns the datetime or None."""
+    now = datetime.now()
+    if dt > now + timedelta(minutes=10):
+        return None
+    if dt < now - timedelta(days=EXIF_MAX_AGE_DAYS):
+        return None
+    return dt
+
+
+def _client_capture_time(raw):
+    """Parse a client-supplied ISO capture time (photo EXIF read client-side,
+    since large photos are re-encoded — EXIF-stripped — before upload)."""
+    if not raw:
+        return None
+    try:
+        return _validate_capture_time(datetime.fromisoformat(str(raw).strip()[:19]))
+    except (TypeError, ValueError):
+        return None
+
+
 def _extract_exif_datetime(image_bytes):
     """Pull the capture time from EXIF (DateTimeOriginal, falling back to
     DateTimeDigitized, then DateTime). Returns a naive local datetime or None.
     Must be called on the raw uploaded bytes — resize strips EXIF.
-    Rejects implausible values (future, or before 2000)."""
+    Rejects implausible values (future, or more than EXIF_MAX_AGE_DAYS old —
+    protects the pattern engine from doctored/wrong camera dates)."""
     try:
         from PIL import Image
     except ImportError:
@@ -391,12 +421,33 @@ def _extract_exif_datetime(image_bytes):
         if not raw:
             return None
         dt = datetime.strptime(str(raw).strip(), '%Y:%m:%d %H:%M:%S')
-        now = datetime.now()
-        if dt > now + timedelta(minutes=10) or dt.year < 2000:
-            return None
-        return dt
+        return _validate_capture_time(dt)
     except Exception as e:
         logger.debug(f'EXIF datetime extract failed: {e}')
+        return None
+
+
+def _record_photo_owner(filename, username):
+    """Authoritative owner record — photo auth checks use this, not the lossy
+    sanitized token embedded in the filename."""
+    try:
+        with sqlite3.connect(DB_PATH, timeout=15) as db:
+            db.execute('INSERT OR REPLACE INTO photo_owners (filename, username) VALUES (?, ?)',
+                       (filename, username))
+            db.commit()
+    except Exception as e:
+        logger.warning(f'photo owner record failed: {e}')
+
+
+def _photo_owner(filename):
+    try:
+        with sqlite3.connect(DB_PATH, timeout=15) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute('SELECT username FROM photo_owners WHERE filename = ?',
+                             (filename,)).fetchone()
+            return row['username'] if row else None
+    except Exception as e:
+        logger.warning(f'photo owner lookup failed: {e}')
         return None
 
 
@@ -480,7 +531,12 @@ def register_photo_catch_routes(app, login_required):
             lon = float(request.form['lon']) if request.form.get('lon') else None
         except ValueError:
             lat = lon = None
-        gps_source = 'browser' if (lat is not None and lon is not None) else None
+        # GPS provenance: the client tracks whether coords came from photo EXIF
+        # (read client-side before re-encoding strips it) or a live device fix.
+        client_gps_source = (request.form.get('gps_source') or '').strip().lower()
+        if client_gps_source not in ('exif', 'browser', 'manual'):
+            client_gps_source = 'browser'
+        gps_source = client_gps_source if (lat is not None and lon is not None) else None
         if lat is None or lon is None:
             exif_lat, exif_lon = _extract_exif_gps(image_bytes)
             if exif_lat is not None and exif_lon is not None:
@@ -489,7 +545,10 @@ def register_photo_catch_routes(app, login_required):
         gps = {'lat': lat, 'lon': lon} if lat is not None and lon is not None else None
 
         # Catch time: prefer the photo's EXIF capture time over upload time.
-        taken_dt = _extract_exif_datetime(image_bytes)
+        # Server-side extraction wins; client-read EXIF time (sent as exif_time)
+        # covers large photos that were re-encoded before upload.
+        taken_dt = _extract_exif_datetime(image_bytes) or \
+            _client_capture_time(request.form.get('exif_time'))
         time_source = 'exif' if taken_dt else 'upload'
         catch_dt = taken_dt or datetime.now()
 
@@ -504,6 +563,7 @@ def register_photo_catch_routes(app, login_required):
         except Exception as e:
             logger.error(f'Photo resize/save failed: {e}')
             return jsonify({'error': 'Could not save photo'}), 500
+        _record_photo_owner(photo_filename, username)
 
         # Optional Garmin/instrument photo: extract numeric values, then DISCARD or
         # store ONLY in the private instrument dir. It must NEVER reach the posts
@@ -521,6 +581,7 @@ def register_photo_catch_routes(app, login_required):
                     try:
                         instr_name = f'instrument_{safe_user}_{ts}.jpg'
                         _resize_and_save(instr_bytes, os.path.join(INSTRUMENT_DIR, instr_name))
+                        _record_photo_owner(instr_name, username)
                     except Exception as e:
                         logger.warning(f'Instrument photo store skipped: {e}')
                     logger.info(f'Instrument extract for {username}: {instrument}')
@@ -578,7 +639,7 @@ def register_photo_catch_routes(app, login_required):
 
         # Crew notifications (DB insert — mirrors captain_advisor flow)
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 groups = ndb.execute('''
                     SELECT g.id, g.name FROM friend_groups g
@@ -630,13 +691,31 @@ def register_photo_catch_routes(app, login_required):
         # Photo filename format: catch_<safe_user>_<timestamp>.jpg — parse owner.
         # Note: safe_user strips '@' etc., so compare against the same normalization of real usernames.
         viewer = session.get('username', '')
+        owner = _photo_owner(filename)  # authoritative
+        if owner is not None:
+            if owner != viewer:
+                try:
+                    with sqlite3.connect(DB_PATH, timeout=15) as ndb:
+                        ndb.row_factory = sqlite3.Row
+                        rows = ndb.execute('''
+                            SELECT DISTINCT m2.username FROM group_members m1
+                            JOIN group_members m2 ON m1.group_id = m2.group_id
+                            WHERE m1.username = ?
+                        ''', (viewer,)).fetchall()
+                        if not any(r['username'] == owner for r in rows):
+                            return jsonify({'error': 'Not authorized'}), 403
+                except Exception as e:
+                    logger.error(f'Photo auth check failed: {e}')
+                    return jsonify({'error': 'Not authorized'}), 403
+            return send_from_directory(PHOTOS_DIR, filename)
+        # Legacy photos (no owner row): fall back to the filename token check.
         owner_safe = ''
         parts = filename.split('_', 2)
         if len(parts) >= 3 and parts[0] == 'catch':
             owner_safe = parts[1]
         if owner_safe and owner_safe != _safe_user(viewer):
             try:
-                with sqlite3.connect(DB_PATH) as ndb:
+                with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                     ndb.row_factory = sqlite3.Row
                     rows = ndb.execute('''
                         SELECT DISTINCT m2.username FROM group_members m1
@@ -664,6 +743,12 @@ def register_photo_catch_routes(app, login_required):
             return jsonify({'error': 'Not found'}), 404
         # Filename format: instrument_<safe_user>_<timestamp>.jpg — parse owner.
         viewer = session.get('username', '')
+        owner = _photo_owner(filename)
+        if owner is not None:
+            if owner != viewer:
+                return jsonify({'error': 'Not authorized'}), 403
+            return send_from_directory(INSTRUMENT_DIR, filename)
+        # Legacy fallback: filename token.
         owner_safe = ''
         parts = filename.split('_', 2)
         if len(parts) >= 3 and parts[0] == 'instrument':
@@ -683,7 +768,7 @@ def register_photo_catch_routes(app, login_required):
         # Everyone whose catches this user is allowed to see: all members of all their crews
         # who have sharing enabled. Include self.
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 my_group_ids = [r['group_id'] for r in ndb.execute(
                     'SELECT group_id FROM group_members WHERE username = ?',
@@ -760,7 +845,7 @@ def register_photo_catch_routes(app, login_required):
         Always includes the viewer themselves. Plus everyone in any shared group."""
         visible = {viewer}
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 rows = ndb.execute('''
                     SELECT DISTINCT m2.username
@@ -778,7 +863,7 @@ def register_photo_catch_routes(app, login_required):
         if not usernames:
             return {}
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 placeholders = ','.join('?' for _ in usernames)
                 rows = ndb.execute(
@@ -845,11 +930,12 @@ def register_photo_catch_routes(app, login_required):
             except Exception as e:
                 logger.error(f'Post photo save failed: {e}')
                 return jsonify({'error': 'Could not save photo'}), 500
+            _record_photo_owner(photo_filename, username)
 
         area_name = coords_to_area_name(lat, lon) if (lat is not None and lon is not None) else None
 
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 cur = ndb.execute(
                     '''INSERT INTO posts (username, body, photo_filename, visibility, lat, lon, area_name)
                        VALUES (?, ?, ?, ?, ?, ?, ?)''',
@@ -871,7 +957,7 @@ def register_photo_catch_routes(app, login_required):
         _ensure_posts_table()
         username = session.get('username', '')
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 row = ndb.execute(
                     'SELECT username, photo_filename FROM posts WHERE id = ?',
@@ -904,7 +990,7 @@ def register_photo_catch_routes(app, login_required):
 
         viewer = session.get('username', '')
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 row = ndb.execute(
                     'SELECT username, visibility FROM posts WHERE photo_filename = ?',
@@ -934,7 +1020,7 @@ def register_photo_catch_routes(app, login_required):
 
         # --- Catches ---
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 # Who's in shared crews with me AND sharing enabled
                 my_group_ids = [r['group_id'] for r in ndb.execute(
@@ -993,7 +1079,7 @@ def register_photo_catch_routes(app, login_required):
 
         # --- Posts ---
         try:
-            with sqlite3.connect(DB_PATH) as ndb:
+            with sqlite3.connect(DB_PATH, timeout=15) as ndb:
                 ndb.row_factory = sqlite3.Row
                 placeholders = ','.join('?' for _ in friends)
                 post_rows = ndb.execute(f'''

@@ -39,7 +39,7 @@ DB_PATH = '/opt/wheelhouse/wheelhouse.db'
 def _latest_sst_trend():
     """Most recent computed SST trend from conditions_log (logger computes it 3x/day)."""
     try:
-        db = sqlite3.connect(DB_PATH)
+        db = sqlite3.connect(DB_PATH, timeout=15)
         db.row_factory = sqlite3.Row
         row = db.execute(
             "SELECT sst_trend FROM conditions_log "
@@ -56,7 +56,7 @@ def _nearest_logged_conditions(at, max_hours=6):
     catches (photo EXIF time) where live buoy/satellite reads would be wrong.
     Returns a sqlite3.Row or None."""
     try:
-        db = sqlite3.connect(DB_PATH)
+        db = sqlite3.connect(DB_PATH, timeout=15)
         db.row_factory = sqlite3.Row
         days = [(at + timedelta(days=d)).strftime('%Y-%m-%d') for d in (-1, 0, 1)]
         rows = db.execute(

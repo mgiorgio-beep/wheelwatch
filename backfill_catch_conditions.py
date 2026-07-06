@@ -71,7 +71,7 @@ def _nearest_snapshot(db, catch_date, catch_hour):
 
 
 def main():
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=15)
     db.row_factory = sqlite3.Row
 
     files = sorted(glob.glob(os.path.join(LOGS_DIR, 'catch_*.json')))

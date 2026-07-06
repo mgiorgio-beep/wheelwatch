@@ -570,14 +570,39 @@ Rules:
     LOGS_DIR = os.path.join(os.path.dirname(__file__), 'logs')
     os.makedirs(LOGS_DIR, exist_ok=True)
 
+    def _safe_owner(u):
+        """Filesystem-safe owner token for log filenames (lossy — display only;
+        authorization still compares these tokens consistently on both sides)."""
+        return ''.join(c for c in (u or '') if c.isalnum() or c in ('-', '.'))[:40] or 'user'
+
+    def _advisor_log_owner(fname):
+        """Owner token from advisor_<owner>_<Y-m-d_HM>.txt; None for legacy
+        ownerless files (advisor_<Y-m-d_HM>.txt), which are never served."""
+        core = fname[len('advisor_'):-len('.txt')]
+        try:
+            datetime.strptime(core, '%Y-%m-%d_%H%M')
+            return None  # legacy, no owner recorded
+        except ValueError:
+            pass
+        parts = core.rsplit('_', 2)
+        if len(parts) == 3:
+            try:
+                datetime.strptime(f'{parts[1]}_{parts[2]}', '%Y-%m-%d_%H%M')
+                return parts[0]
+            except ValueError:
+                pass
+        return None
+
     @app.route('/api/fishing/advisor/save', methods=['POST'])
     @login_required
     def api_advisor_save():
+        from flask import session as flask_session
         data = request.get_json()
         history = data.get('history', [])
         if not history:
             return jsonify({'error': 'No conversation to save'}), 400
 
+        owner = _safe_owner(flask_session.get('username', ''))
         ts = datetime.now().strftime('%Y-%m-%d_%H%M')
         # Build text log
         lines = [f"WHEELHOUSE ADVISOR LOG — {datetime.now().strftime('%B %d, %Y %I:%M %p')}", "="*60, ""]
@@ -587,7 +612,7 @@ Rules:
             lines.append(msg['content'])
             lines.append("")
 
-        filename = f"advisor_{ts}.txt"
+        filename = f"advisor_{owner}_{ts}.txt"
         filepath = os.path.join(LOGS_DIR, filename)
         with open(filepath, 'w') as f:
             f.write('\n'.join(lines))
@@ -598,16 +623,21 @@ Rules:
     @app.route('/api/fishing/advisor/logs')
     @login_required
     def api_advisor_logs():
+        from flask import session as flask_session
+        me = _safe_owner(flask_session.get('username', ''))
         files = sorted(globmod.glob(os.path.join(LOGS_DIR, 'advisor_*.txt')), reverse=True)
+        # Ownership: only this user's logs. Legacy ownerless files (which may
+        # contain GPS lines from any user) are hidden from everyone.
+        files = [fp for fp in files if _advisor_log_owner(os.path.basename(fp)) == me]
         logs = []
         for fp in files[:20]:
             fname = os.path.basename(fp)
-            # Parse date from filename: advisor_2026-04-04_1430.txt
+            # Parse date from filename: advisor_<owner>_2026-04-04_1430.txt
             try:
-                date_part = fname.replace('advisor_', '').replace('.txt', '')
-                dt = datetime.strptime(date_part, '%Y-%m-%d_%H%M')
+                date_part = fname[:-len('.txt')].rsplit('_', 2)
+                dt = datetime.strptime(f'{date_part[1]}_{date_part[2]}', '%Y-%m-%d_%H%M')
                 date_str = dt.strftime('%b %d, %Y %I:%M %p')
-            except:
+            except (ValueError, IndexError):
                 date_str = fname
             # Get preview (first user message)
             preview = ''
@@ -628,9 +658,16 @@ Rules:
     @app.route('/api/fishing/advisor/logs/<filename>')
     @login_required
     def api_advisor_log_view(filename):
-        # Sanitize filename
-        if '..' in filename or '/' in filename:
+        from flask import session as flask_session
+        # Sanitize: advisor logs ONLY (never catch_*.json or anything else in
+        # LOGS_DIR), no traversal, and only the owner may view.
+        if '..' in filename or '/' in filename or '\\' in filename:
             return jsonify({'error': 'Invalid filename'}), 400
+        if not (filename.startswith('advisor_') and filename.endswith('.txt')):
+            return jsonify({'error': 'Invalid filename'}), 400
+        me = _safe_owner(flask_session.get('username', ''))
+        if _advisor_log_owner(filename) != me:
+            return jsonify({'error': 'Not authorized'}), 403
         filepath = os.path.join(LOGS_DIR, filename)
         if not os.path.exists(filepath):
             return jsonify({'error': 'Log not found'}), 404

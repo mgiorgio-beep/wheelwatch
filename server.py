@@ -7,6 +7,8 @@ import random
 import string
 import glob as globmod
 import time as time_module
+import hmac
+import hashlib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from flask import Flask, send_from_directory, session, request, redirect, jsonify, g
@@ -22,7 +24,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger('wheelhouse')
 
 app = Flask(__name__, static_folder='static')
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+_secret = os.environ.get('SECRET_KEY', '')
+if not _secret:
+    _secret = os.urandom(24).hex()
+    logger.critical('SECRET_KEY is not set — generated an ephemeral key. '
+                    'ALL SESSIONS WILL DROP ON EVERY RESTART. Set SECRET_KEY in .env.')
+app.secret_key = _secret
 app.permanent_session_lifetime = timedelta(days=30)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'wheelhouse.db')
@@ -31,6 +38,41 @@ NOTIFY_EMAIL = 'mgiorgio@rednun.com'
 GMAIL_USER = os.environ.get('GMAIL_ADDRESS', '')
 GMAIL_PASS = os.environ.get('GMAIL_APP_PASSWORD', '')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+
+
+# ==================== AUTH RATE LIMITING ====================
+# Simple in-memory failure tracker (per gunicorn worker). Not perfect across
+# workers, but turns online brute force from thousands/min into a handful.
+
+_AUTH_FAILURES = {}  # key -> [timestamps]
+_AUTH_WINDOW_S = 15 * 60
+_AUTH_MAX_FAILURES = 8
+
+
+def _client_ip():
+    fwd = request.headers.get('X-Forwarded-For', '')
+    if fwd:
+        return fwd.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+
+def _auth_blocked(key):
+    now = time_module.time()
+    hits = [t for t in _AUTH_FAILURES.get(key, []) if now - t < _AUTH_WINDOW_S]
+    _AUTH_FAILURES[key] = hits
+    return len(hits) >= _AUTH_MAX_FAILURES
+
+
+def _auth_failed(key):
+    _AUTH_FAILURES.setdefault(key, []).append(time_module.time())
+
+
+def _admin_token():
+    """Derived admin session token — never the password itself."""
+    if not ADMIN_PASSWORD:
+        return ''
+    return hmac.new(app.secret_key.encode(), b'wh-admin:' + ADMIN_PASSWORD.encode(),
+                    hashlib.sha256).hexdigest()
 
 
 # ==================== EMAIL NOTIFICATIONS ====================
@@ -57,7 +99,7 @@ def send_notification(subject, body):
 
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        g.db = sqlite3.connect(DB_PATH, timeout=15)
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -68,7 +110,13 @@ def close_db(exception):
         db.close()
 
 def init_db():
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=15)
+    # WAL lets the web workers, cron logger, and backfill write concurrently
+    # without 'database is locked' errors. Persistent — set once per DB file.
+    try:
+        db.execute('PRAGMA journal_mode=WAL')
+    except Exception:
+        pass
     db.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
@@ -206,6 +254,9 @@ def login():
         password = request.form.get('password', '')
         if not username or not password:
             return render_auth_page('login', error='Enter email and password')
+        rl_key = f'login:{_client_ip()}:{username}'
+        if _auth_blocked(rl_key):
+            return render_auth_page('login', error='Too many attempts — try again in 15 minutes')
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         if user and check_password_hash(user['password_hash'], password):
@@ -213,6 +264,7 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect('/')
+        _auth_failed(rl_key)
         return render_auth_page('login', error='Invalid email or password')
     return render_auth_page('login')
 
@@ -232,8 +284,8 @@ def signup():
             return render_auth_page('signup', error='Email and password required')
         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', username):
             return render_auth_page('signup', error='Enter a valid email address')
-        if len(password) < 4:
-            return render_auth_page('signup', error='Password must be at least 4 characters')
+        if len(password) < 8:
+            return render_auth_page('signup', error='Password must be at least 8 characters')
         if password != confirm:
             return render_auth_page('signup', error='Passwords don\'t match')
         db = get_db()
@@ -429,7 +481,7 @@ def api_bot_advisor():
         return jsonify({'error': 'Bot endpoint not configured'}), 503
 
     provided_key = request.headers.get('X-Bot-Key', '')
-    if provided_key != expected_key:
+    if not hmac.compare_digest(provided_key, expected_key):
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.get_json(silent=True) or {}
@@ -1014,6 +1066,21 @@ def sms_inbound():
         return ('', 204)
 
     logger.info(f'SMS inbound from {from_number[-4:]}****: {body[:50]}')
+
+    # Idempotency: Twilio retries webhooks that exceed its 15s timeout. Since
+    # catch-logging below can take that long (Claude parse + SMS fan-out), a
+    # retry would double-log the catch — drop exact re-deliveries here.
+    if twilio_sid:
+        try:
+            dup = get_db().execute(
+                'SELECT 1 FROM sms_conversations WHERE twilio_sid = ? LIMIT 1',
+                (twilio_sid,)).fetchone()
+            if dup:
+                logger.info(f'Duplicate Twilio delivery {twilio_sid} — ignored')
+                return ('', 204)
+        except Exception as e:
+            logger.warning(f'SMS dedupe check failed: {e}')
+
     log_sms(from_number, 'inbound', body, twilio_sid)
 
     db = get_db()
@@ -1165,7 +1232,7 @@ def _get_admin_username():
     global _ADMIN_USERNAME
     if _ADMIN_USERNAME is None:
         try:
-            db = sqlite3.connect(DB_PATH)
+            db = sqlite3.connect(DB_PATH, timeout=15)
             db.row_factory = sqlite3.Row
             user = db.execute('SELECT username FROM users WHERE is_admin = 1 LIMIT 1').fetchone()
             _ADMIN_USERNAME = user['username'] if user else ''
@@ -1504,8 +1571,9 @@ def render_legal_page(page_type):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.cookies.get('wh_admin')
-        if not auth or auth != ADMIN_PASSWORD or not ADMIN_PASSWORD:
+        auth = request.cookies.get('wh_admin', '')
+        token = _admin_token()
+        if not token or not auth or not hmac.compare_digest(auth, token):
             return redirect('/admin/login')
         return f(*args, **kwargs)
     return decorated
@@ -1515,12 +1583,19 @@ def admin_required(f):
 def admin_login():
     error = None
     if request.method == 'POST':
-        pw = request.form.get('password', '')
-        if pw == ADMIN_PASSWORD and ADMIN_PASSWORD:
-            resp = redirect('/admin')
-            resp.set_cookie('wh_admin', pw, httponly=True, samesite='Strict', max_age=86400*30)
-            return resp
-        error = 'Wrong password'
+        rl_key = f'admin:{_client_ip()}'
+        if _auth_blocked(rl_key):
+            error = 'Too many attempts — try again in 15 minutes'
+        else:
+            pw = request.form.get('password', '')
+            if ADMIN_PASSWORD and hmac.compare_digest(pw, ADMIN_PASSWORD):
+                resp = redirect('/admin')
+                # Derived token — the password itself never goes into a cookie.
+                resp.set_cookie('wh_admin', _admin_token(), httponly=True,
+                                samesite='Strict', secure=True, max_age=86400*30)
+                return resp
+            _auth_failed(rl_key)
+            error = 'Wrong password'
     return f'''<!DOCTYPE html>
 <html><head><title>Wheelhouse Admin</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1614,7 +1689,8 @@ def admin_dashboard():
     catch_files = globmod.glob('/opt/wheelhouse/logs/catch_*.json')
     catch_count = len(catch_files)
     catches_by_user = {}
-    for fp in catch_files:
+    # Cap the per-request parse work; newest files first.
+    for fp in sorted(catch_files, reverse=True)[:2000]:
         try:
             with open(fp) as f:
                 e = json.load(f)
@@ -1898,4 +1974,6 @@ register_photo_catch_routes(app, login_required)
 logger.info('Wheelhouse server initialized')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8090, debug=True)
+    # Dev entrypoint only — production runs under gunicorn (see wheelhouse.service).
+    # Never enable debug=True here: the Werkzeug debugger is remote code execution.
+    app.run(host='127.0.0.1', port=8090)
