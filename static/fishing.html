@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/static/manifest.json">
@@ -34,6 +34,10 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  /* Allow scrolling but block browser pinch/double-tap zoom, which un-pins
+     position:fixed elements (the floating tab bar bug). JS-driven gestures
+     (Leaflet map pinch, swipe-to-delete) are unaffected. */
+  touch-action: pan-x pan-y;
 }
 
 /* ==================== HEADER ==================== */
@@ -89,7 +93,15 @@ body {
   padding: 8px 0 env(safe-area-inset-bottom);
   z-index: 500;
   min-height: 82px;
+  /* Force own compositing layer: prevents iOS scroll-lag where the
+     fixed bar visually drifts during fast scrolls with backdrop-filter */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
+/* Hidden while the iOS keyboard is open: WebKit un-pins position:fixed
+   elements while the keyboard is up, making the bar float mid-screen */
+body.kb-open .tab-bar,
+body.kb-open .advisor-fab { visibility: hidden; }
 .tab-item {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; gap: 4px;
@@ -1298,6 +1310,44 @@ body {
 <script>
 (function(){
 'use strict';
+
+// ==================== FIXED-BAR KEYBOARD GUARD (iOS) ====================
+// On iOS, position:fixed elements detach from the viewport while the
+// on-screen keyboard is open (and can stay detached after it closes).
+// Hide the tab bar / FAB while the keyboard is up, and nudge WebKit to
+// re-pin them when it goes away.
+(function() {
+  var kbOpen = false;
+  function setKb(open) {
+    if (open === kbOpen) return;
+    kbOpen = open;
+    document.body.classList.toggle('kb-open', open);
+    if (!open) {
+      // force a re-layout so WebKit re-anchors fixed elements
+      window.scrollTo(window.scrollX, window.scrollY);
+    }
+  }
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    var checkVv = function() {
+      // keyboard is open when the visual viewport is much shorter than the window
+      setKb((window.innerHeight - vv.height) > 120);
+    };
+    vv.addEventListener('resize', checkVv);
+    vv.addEventListener('scroll', checkVv);
+  }
+  var isField = function(el) {
+    return el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+  };
+  document.addEventListener('focusin', function(e) {
+    if (isField(e.target)) setKb(true);
+  });
+  document.addEventListener('focusout', function() {
+    setTimeout(function() {
+      if (!isField(document.activeElement)) setKb(false);
+    }, 150);
+  });
+})();
 
 // ==================== TAB SWITCHING ====================
 var activeTab = 'feed';
