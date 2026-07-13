@@ -1054,6 +1054,77 @@ def api_location_crew():
     })
 
 
+@app.route('/api/catches/map', methods=['GET'])
+@login_required
+def api_catches_map():
+    """
+    Catches with GPS for the chart view: the requesting captain's own,
+    plus catches from crewmates who share a group with them and have
+    share_my_catches on. Filterable by ?days=N (default 7, max 365).
+    """
+    db = get_db()
+    username = session['username']
+
+    try:
+        days = int(request.args.get('days', 7))
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(days, 365))
+
+    # Whose catches this captain may see: their own, plus opted-in
+    # members of any group they belong to.
+    visible = {username}
+    group_ids = [r['group_id'] for r in db.execute(
+        'SELECT group_id FROM group_members WHERE username = ?',
+        (username,)).fetchall()]
+    if group_ids:
+        placeholders = ','.join(['?'] * len(group_ids))
+        rows = db.execute(f'''
+            SELECT DISTINCT username FROM group_members
+            WHERE group_id IN ({placeholders}) AND share_my_catches = 1
+        ''', group_ids).fetchall()
+        visible.update(r['username'] for r in rows)
+
+    # days=1 means "today"; N means today plus the previous N-1 days.
+    cutoff = (datetime.now() - timedelta(days=days - 1)).strftime('%Y-%m-%dT00:00:00')
+
+    from captain_advisor import LOGS_DIR
+    catches = []
+    for fp in sorted(globmod.glob(os.path.join(LOGS_DIR, 'catch_*.json')), reverse=True):
+        try:
+            with open(fp) as f:
+                entry = json.load(f)
+            if entry.get('logged_by') not in visible:
+                continue
+            ts = entry.get('timestamp', '')
+            if not ts or ts < cutoff:
+                continue
+            gps = entry.get('gps') or {}
+            if not gps.get('lat') or not gps.get('lon'):
+                continue
+            try:
+                date_label = datetime.fromisoformat(ts).strftime('%b %d')
+            except ValueError:
+                date_label = ts[:10]
+            catches.append({
+                'username': entry.get('logged_by', ''),
+                'mine': entry.get('logged_by') == username,
+                'species': entry.get('species', ''),
+                'technique': entry.get('technique', ''),
+                'lure': entry.get('lure', ''),
+                'spot': entry.get('spot', ''),
+                'gps': {'lat': gps['lat'], 'lon': gps['lon']},
+                'date': date_label,
+                'time': ts[11:16],
+            })
+            if len(catches) >= 500:
+                break
+        except Exception:
+            pass
+
+    return jsonify({'catches': catches, 'days': days})
+
+
 @app.route('/api/location/status', methods=['GET'])
 @login_required
 def api_location_status():

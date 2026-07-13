@@ -1066,6 +1066,18 @@ body.kb-open .advisor-fab { visibility: hidden; }
             <option value="">Nobody (dark)</option>
           </select>
         </div>
+        <div style="padding:0 16px 12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;">Catches on chart</div>
+            <div id="catch-range-count" style="font-size:11px;color:var(--text-muted);"></div>
+          </div>
+          <div class="gtab-bar" style="margin-bottom:0;">
+            <button class="gtab-btn" id="catch-range-1" onclick="setCatchRange(1)">Today</button>
+            <button class="gtab-btn active" id="catch-range-7" onclick="setCatchRange(7)">7 Days</button>
+            <button class="gtab-btn" id="catch-range-14" onclick="setCatchRange(14)">14 Days</button>
+            <button class="gtab-btn" id="catch-range-30" onclick="setCatchRange(30)">30 Days</button>
+          </div>
+        </div>
         <div id="crew-map" style="height:300px;background:#0D1F2D;"></div>
         <div style="padding:12px 16px;">
           <div style="font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ON THE WATER</div>
@@ -4235,6 +4247,7 @@ window.showCrewMap = function() {
   var section = document.getElementById('crew-map-section');
   if (section) { section.style.display = 'block'; section.scrollIntoView({behavior:'smooth'}); }
   initMap();
+  if (crewMap) loadMapCatches();  // refresh pins on reopen (initMap handles first build)
 };
 
 window.hideCrewMap = function() {
@@ -4263,6 +4276,54 @@ function buildMap() {
   startLocationSharing();
   loadCrewSelector();
   pollCrewLocations();
+  loadMapCatches();
+}
+
+// ==================== CATCHES ON CHART (date-filtered) ====================
+var catchRangeDays = 7;
+
+window.setCatchRange = function(days) {
+  catchRangeDays = days;
+  [1, 7, 14, 30].forEach(function(d) {
+    var btn = document.getElementById('catch-range-' + d);
+    if (btn) btn.classList.toggle('active', d === days);
+  });
+  loadMapCatches();
+};
+
+async function loadMapCatches() {
+  if (!crewMap) return;
+  try {
+    var res = await whFetch('/api/catches/map?days=' + catchRangeDays);
+    var data = await res.json();
+    drawCatchMarkers(data.catches || []);
+  } catch(e) {}
+}
+
+function drawCatchMarkers(catches) {
+  if (!crewMap) return;
+  catchMarkers.forEach(function(m) { crewMap.removeLayer(m); });
+  catchMarkers = [];
+  catches.forEach(function(c) {
+    if (!c.gps || !c.gps.lat || !c.gps.lon) return;
+    var color = c.mine ? 'var(--accent)' : 'var(--green)';
+    var icon = L.divIcon({
+      html: '<div style="width:12px;height:12px;background:'+color+';border:1.5px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>',
+      className: '', iconSize: [12, 12], iconAnchor: [6, 6]
+    });
+    var who = c.mine ? 'You' : escHtml(c.username);
+    var detail = [c.technique, c.lure].filter(Boolean).map(escHtml).join(' &middot; ');
+    var popup = '<div style="font-family:inherit;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:8px;font-size:13px;">'+
+      '<div style="font-weight:700;margin-bottom:2px;">'+escHtml(c.species||'Catch')+'</div>'+
+      (detail ? '<div style="color:var(--text-muted);">'+detail+'</div>' : '')+
+      (c.spot ? '<div style="color:var(--text-muted);">'+escHtml(c.spot)+'</div>' : '')+
+      '<div style="color:var(--text-muted);margin-top:2px;">'+who+' &middot; '+escHtml(c.date)+' '+escHtml(c.time)+'</div></div>';
+    catchMarkers.push(L.marker([c.gps.lat, c.gps.lon], {icon:icon}).bindPopup(popup).addTo(crewMap));
+  });
+  var count = document.getElementById('catch-range-count');
+  if (count) count.textContent = catchMarkers.length
+    ? catchMarkers.length + (catchMarkers.length === 1 ? ' catch' : ' catches')
+    : 'No catches in range';
 }
 
 function startLocationSharing() {
@@ -4335,13 +4396,13 @@ async function pollCrewLocations() {
   try {
     var res = await whFetch('/api/location/crew');
     var data = await res.json();
-    updateCrewMap(data.members || [], data.catches || []);
+    updateCrewMap(data.members || []);
     updateCrewList(data.members || []);
   } catch(e) {}
   crewPollTimer = setTimeout(pollCrewLocations, 30000);
 }
 
-function updateCrewMap(members, catches) {
+function updateCrewMap(members) {
   if (!crewMap) return;
   var activeUsernames = {};
   members.forEach(function(member) {
@@ -4359,17 +4420,6 @@ function updateCrewMap(members, catches) {
   });
   Object.keys(crewMarkers).forEach(function(username) {
     if (username !== '_self' && !activeUsernames[username]) { crewMap.removeLayer(crewMarkers[username]); delete crewMarkers[username]; }
-  });
-  catchMarkers.forEach(function(m) { crewMap.removeLayer(m); });
-  catchMarkers = [];
-  var catchIcon = L.divIcon({ html: '<div style="width:10px;height:10px;background:var(--green);border:1.5px solid #fff;border-radius:50%;"></div>', className: '', iconSize: [10, 10], iconAnchor: [5, 5] });
-  catches.forEach(function(c) {
-    if (!c.gps || !c.gps.lat || !c.gps.lon) return;
-    var popup = '<div style="font-family:inherit;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:8px;font-size:13px;">'+
-      '<div style="font-weight:700;margin-bottom:2px;">'+escHtml(c.species||'Catch')+'</div>'+
-      '<div style="color:var(--text-muted);">'+escHtml(c.technique||'')+' &middot; '+escHtml(c.lure||'')+'</div>'+
-      '<div style="color:var(--text-muted);margin-top:2px;">'+escHtml(c.username)+' &middot; '+escHtml(c.time)+'</div></div>';
-    catchMarkers.push(L.marker([c.gps.lat, c.gps.lon], {icon:catchIcon}).bindPopup(popup).addTo(crewMap));
   });
   if (currentLat && currentLon) {
     if (!crewMarkers['_self']) {
