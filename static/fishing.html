@@ -744,6 +744,45 @@ body.kb-open .advisor-fab { visibility: hidden; }
   height: 0.5px; background: var(--border-light); margin: 16px 0;
 }
 .mic-svg { width: 20px; height: 20px; }
+/* ==================== QUICK CATCH (long-press Log Catch) ==================== */
+#tab-btn-catch {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+#tab-btn-catch.qc-holding svg { animation: qcPulse 0.5s linear forwards; }
+@keyframes qcPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.5); }
+}
+#tab-btn-catch.qc-armed { color: var(--green) !important; }
+.qc-overlay {
+  position: fixed; inset: 0; z-index: 10000; display: none;
+  flex-direction: column; background: rgba(8, 13, 19, 0.97);
+}
+.qc-overlay.open { display: flex; }
+.qc-garmin-btn {
+  flex: 1; margin: 84px 16px 16px; border: 3px solid var(--green); border-radius: 20px;
+  background: #0f2230; color: #fff; font-size: 32px; font-weight: 800; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 20px; text-align: center;
+}
+.qc-garmin-btn .qc-sub { font-size: 15px; font-weight: 500; opacity: 0.75; line-height: 1.4; }
+.qc-thumb {
+  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 20px;
+  width: 72px; height: 72px; object-fit: cover; border-radius: 10px;
+  border: 2px solid var(--green);
+}
+.qc-skip {
+  margin: 0 16px calc(env(safe-area-inset-bottom, 0px) + 22px); padding: 14px;
+  background: none; border: none; color: #8fa3b5; font-size: 16px;
+  text-decoration: underline; cursor: pointer;
+}
+.qc-toggle-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  font-size: 12px; color: var(--text-muted);
+}
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -915,6 +954,10 @@ body.kb-open .advisor-fab { visibility: hidden; }
         <span class="sub">Reads water temp, depth &amp; GPS off your Garmin — not shared</span>
       </button>
       <div id="catch-instrument-status" style="font-size:11px;margin-top:4px;color:var(--text-muted);"></div>
+      <div class="qc-toggle-row">
+        <input type="checkbox" id="qc-enabled" checked onchange="qcToggleChanged(this)">
+        <label for="qc-enabled">Quick Catch: hold the Log Catch tab to snap &amp; log in two taps</label>
+      </div>
     </div>
     <div class="catch-label">Spot</div>
     <div class="catch-chips" id="catch-spot-chips">
@@ -1318,6 +1361,18 @@ body.kb-open .advisor-fab { visibility: hidden; }
     <span>Crews</span>
   </button>
 </nav>
+
+<!-- Quick Catch: hidden camera inputs + full-screen Garmin step -->
+<input type="file" id="qc-fish-input" accept="image/*" capture="environment" style="display:none;">
+<input type="file" id="qc-garmin-input" accept="image/*" capture="environment" style="display:none;">
+<div class="qc-overlay" id="qc-overlay">
+  <img class="qc-thumb" id="qc-thumb" alt="Fish photo" style="display:none;">
+  <button class="qc-garmin-btn" id="qc-garmin-btn" type="button">
+    <span>&#128247; Snap the Garmin</span>
+    <span class="qc-sub">sonar / chartplotter screen &mdash; temp, depth &amp; GPS are read automatically</span>
+  </button>
+  <button class="qc-skip" id="qc-skip" type="button">Skip &mdash; log with fish photo only</button>
+</div>
 
 <script>
 (function(){
@@ -3642,6 +3697,7 @@ window.syncCatchQueue = function() {
       if (i >= items.length) return Promise.resolve();
       var item = items[i++];
       var rec = item.value || {};
+      if (rec.draft) return next();  // Quick Catch drafts are not syncable yet
       var fd = new FormData();
       fd.append('photo', rec.photo, 'catch.jpg');
       var fields = rec.fields || {};
@@ -3686,6 +3742,165 @@ window.addEventListener('online', function() { syncCatchQueue(); });
 document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'visible') syncCatchQueue();
 });
+
+// ==================== QUICK CATCH (long-press Log Catch) ====================
+// Hold the Log Catch tab ~0.5s → native camera for the fish → one giant button
+// → native camera for the Garmin → saved through the NORMAL save pipeline, so
+// the stash-on-failure queue and client_id duplicate guard apply unchanged.
+// A short tap behaves exactly as before. Toggle lives on the catch tab.
+var QC_HOLD_MS = 500;
+var QC_MOVE_CANCEL_PX = 10;
+
+function qcEnabled() {
+  try { return localStorage.getItem('wh_quickcatch') !== 'off'; } catch (e) { return true; }
+}
+window.qcToggleChanged = function(cb) {
+  try { localStorage.setItem('wh_quickcatch', cb.checked ? 'on' : 'off'); } catch (e) {}
+};
+
+(function qcInit() {
+  var btn = document.getElementById('tab-btn-catch');
+  var fishInput = document.getElementById('qc-fish-input');
+  var garminInput = document.getElementById('qc-garmin-input');
+  var overlay = document.getElementById('qc-overlay');
+  if (!btn || !fishInput || !garminInput || !overlay || !window.PointerEvent) return;
+
+  var qcTimer = null, qcArmed = false, qcStart = null, qcDraftKey = null;
+  var toggle = document.getElementById('qc-enabled');
+  if (toggle) toggle.checked = qcEnabled();
+
+  btn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+  function cancelHold() {
+    if (qcTimer) { clearTimeout(qcTimer); qcTimer = null; }
+    qcStart = null;
+    btn.classList.remove('qc-holding');
+  }
+
+  btn.addEventListener('pointerdown', function(e) {
+    if (!qcEnabled()) return;
+    qcArmed = false;
+    qcStart = { x: e.clientX, y: e.clientY };
+    btn.classList.add('qc-holding');
+    qcTimer = setTimeout(function() {
+      qcTimer = null;
+      qcArmed = true;  // release now opens the camera
+      btn.classList.remove('qc-holding');
+      btn.classList.add('qc-armed');
+    }, QC_HOLD_MS);
+  });
+
+  btn.addEventListener('pointermove', function(e) {
+    if (!qcStart) return;
+    var dx = e.clientX - qcStart.x, dy = e.clientY - qcStart.y;
+    if (dx * dx + dy * dy > QC_MOVE_CANCEL_PX * QC_MOVE_CANCEL_PX) cancelHold();  // scroll, not a hold
+  });
+  btn.addEventListener('pointercancel', function() {
+    cancelHold(); qcArmed = false; btn.classList.remove('qc-armed');
+  });
+
+  btn.addEventListener('pointerup', function() {
+    cancelHold();
+    if (!qcArmed) return;  // short tap → normal tab switch, untouched
+    qcArmed = false;
+    setTimeout(function() { btn.classList.remove('qc-armed'); }, 500);
+    catchResetForm();      // fresh state for this catch
+    // Position NOW — where the fish was caught, not where the boat drifts to
+    // while photos are being taken.
+    catchGetGps();
+    // Synchronous .click() inside the pointerup handler: iOS honors a
+    // programmatic file-input open only in an unbroken user-gesture chain.
+    fishInput.click();
+  });
+
+  fishInput.addEventListener('change', function() {
+    var f = fishInput.files && fishInput.files[0];
+    if (!f) return;  // camera cancelled → abandon quietly, nothing was created
+    readExifGps(f, function(exLat, exLon, exTime) {
+      if (exTime) catchPhotoExifTime = exTime;
+      if (exLat != null && exLon != null) {
+        catchGps = { lat: exLat, lon: exLon };
+        catchGpsSource = 'exif';
+      }
+      compressImage(f, 1600, 0.85, function(processed) {
+        catchPhotoFile = processed;
+        if (!catchClientId) {
+          catchClientId = 'c-' + Date.now().toString(36) + '-' +
+            Math.random().toString(36).slice(2, 10);
+        }
+        // Durable draft the moment the photo lands: iOS never puts in-app
+        // camera shots in the camera roll, so this stash is the ONLY copy.
+        // If the app dies mid-flow, the draft is promoted to a fish-only
+        // queued catch on next launch — an already-taken photo can't be lost.
+        var draft = {
+          draft: true,
+          queued_at: catchQueueLocalIso(),
+          fields: { client_id: catchClientId },
+          photo: processed,
+          instrument: null
+        };
+        if (catchGps) { draft.fields.lat = String(catchGps.lat); draft.fields.lon = String(catchGps.lon); }
+        if (catchGpsSource) draft.fields.gps_source = catchGpsSource;
+        if (catchPhotoExifTime) draft.fields.exif_time = catchPhotoExifTime;
+        catchQueueAdd(draft).then(function(key) { qcDraftKey = key; }).catch(function() {});
+        var thumb = document.getElementById('qc-thumb');
+        if (thumb) { thumb.src = URL.createObjectURL(processed); thumb.style.display = 'block'; }
+        overlay.classList.add('open');
+        fishInput.value = '';
+      });
+    });
+  });
+
+  document.getElementById('qc-garmin-btn').addEventListener('click', function() {
+    garminInput.click();  // this tap is the user gesture iOS requires for camera #2
+  });
+  document.getElementById('qc-skip').addEventListener('click', function() {
+    qcFinalize(null);
+  });
+  garminInput.addEventListener('change', function() {
+    var f = garminInput.files && garminInput.files[0];
+    garminInput.value = '';
+    if (!f) { qcFinalize(null); return; }  // cancelled → save with fish photo only
+    compressImage(f, 1600, 0.85, function(processed) { qcFinalize(processed); });
+  });
+
+  function qcFinalize(instrumentFile) {
+    overlay.classList.remove('open');
+    var thumb = document.getElementById('qc-thumb');
+    if (thumb) thumb.style.display = 'none';
+    catchInstrumentFile = instrumentFile || null;
+    // The normal save pipeline owns the catch from here (it stashes on any
+    // failure itself) — the capture draft has done its job.
+    if (qcDraftKey != null) { catchQueueDelete(qcDraftKey).catch(function() {}); qcDraftKey = null; }
+    switchTab('catch');
+    var preview = document.getElementById('catch-photo-preview');
+    if (preview && catchPhotoFile) {
+      preview.innerHTML =
+        '<div class="photo-preview"><img src="' + URL.createObjectURL(catchPhotoFile) + '" alt="Catch photo"></div>' +
+        '<div style="font-size:11px;margin-top:4px;color:var(--text-muted);">Quick Catch &mdash; add species &amp; details once it saves.</div>';
+    }
+    catchSave();
+  }
+
+  // Recover orphaned drafts (app killed mid-flow): promote anything older
+  // than 3 minutes to a real queued catch so it syncs as fish-photo-only.
+  catchQueueAll().then(function(items) {
+    var now = Date.now();
+    items.forEach(function(item) {
+      var rec = item.value || {};
+      if (!rec.draft) return;
+      var qd = safeDate(rec.queued_at);
+      if (qd && now - qd.getTime() < 3 * 60 * 1000) return;
+      delete rec.draft;
+      catchQueueAdd(rec).then(function() {
+        return catchQueueDelete(item.key);
+      }).then(function() {
+        updateCatchQueueBadge();
+        syncCatchQueue();
+      }).catch(function() {});
+    });
+  }).catch(function() {});
+})();
 
 // Redraw charts on resize
 window.addEventListener('resize', function() {

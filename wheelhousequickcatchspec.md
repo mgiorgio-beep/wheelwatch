@@ -43,7 +43,7 @@ gunicorn moved to explicit threaded workers (`-w 2 --threads 8 --worker-class gt
 
 # Project 2: Quick Catch (Long-Press Log Catch)
 
-**Status:** Ready for implementation
+**Status:** v1 shipped 2026-07-18 — tune hold threshold (400–600 ms) in field testing
 **Depends on:** Project 1 (queue + duplicate guard are prerequisites for §6's guarantees; drafts created by Quick Catch use the same stash and `client_id` idempotency).
 **Platform context:** Wheelhouse runs as a web app in iOS Safari / installed as a home-screen PWA. All constraints below assume that environment.
 
