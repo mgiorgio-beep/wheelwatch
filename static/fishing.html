@@ -757,6 +757,7 @@ body.kb-open .advisor-fab { visibility: hidden; }
   to { transform: scale(1.5); }
 }
 #tab-btn-catch.qc-armed { color: var(--green) !important; }
+#tab-btn-catch.qc-armed svg { transform: scale(1.5); }  /* stays big = armed, release to shoot */
 .qc-overlay {
   position: fixed; inset: 0; z-index: 10000; display: none;
   flex-direction: column; background: rgba(8, 13, 19, 0.97);
@@ -3765,7 +3766,7 @@ window.qcToggleChanged = function(cb) {
   var overlay = document.getElementById('qc-overlay');
   if (!btn || !fishInput || !garminInput || !overlay || !window.PointerEvent) return;
 
-  var qcTimer = null, qcArmed = false, qcStart = null, qcDraftKey = null;
+  var qcTimer = null, qcArmed = false, qcArmedExpiry = null, qcStart = null, qcDraftKey = null;
   var toggle = document.getElementById('qc-enabled');
   if (toggle) toggle.checked = qcEnabled();
 
@@ -3777,41 +3778,54 @@ window.qcToggleChanged = function(cb) {
     btn.classList.remove('qc-holding');
   }
 
+  function disarm() {
+    qcArmed = false;
+    if (qcArmedExpiry) { clearTimeout(qcArmedExpiry); qcArmedExpiry = null; }
+    btn.classList.remove('qc-armed');
+  }
+
   btn.addEventListener('pointerdown', function(e) {
     if (!qcEnabled()) return;
-    qcArmed = false;
+    disarm();
     qcStart = { x: e.clientX, y: e.clientY };
     btn.classList.add('qc-holding');
     qcTimer = setTimeout(function() {
       qcTimer = null;
-      qcArmed = true;  // release now opens the camera
+      // Armed: icon stays enlarged + green. The RELEASE (its click event, which
+      // iOS always delivers with real user activation) fires the camera — we do
+      // NOT trigger from pointerup, which iOS can refuse after a long hold.
+      qcArmed = true;
       btn.classList.remove('qc-holding');
       btn.classList.add('qc-armed');
+      qcArmedExpiry = setTimeout(disarm, 2500);  // never leave a stale armed state
     }, QC_HOLD_MS);
   });
 
   btn.addEventListener('pointermove', function(e) {
-    if (!qcStart) return;
+    if (!qcStart || qcArmed) return;  // once armed, finger wobble is irrelevant
     var dx = e.clientX - qcStart.x, dy = e.clientY - qcStart.y;
     if (dx * dx + dy * dy > QC_MOVE_CANCEL_PX * QC_MOVE_CANCEL_PX) cancelHold();  // scroll, not a hold
   });
-  btn.addEventListener('pointercancel', function() {
-    cancelHold(); qcArmed = false; btn.classList.remove('qc-armed');
-  });
+  btn.addEventListener('pointerup', cancelHold);
+  btn.addEventListener('pointercancel', cancelHold);
+  // NOTE: pointercancel does NOT disarm — iOS sometimes fires it during a long
+  // hold even when a click still follows; the armed-expiry timer cleans up.
 
-  btn.addEventListener('pointerup', function() {
-    cancelHold();
-    if (!qcArmed) return;  // short tap → normal tab switch, untouched
-    qcArmed = false;
-    setTimeout(function() { btn.classList.remove('qc-armed'); }, 500);
-    catchResetForm();      // fresh state for this catch
+  // Intercept the release's click at the document (capture phase) — this runs
+  // BEFORE the button's inline onclick, so when armed we swallow the tab switch
+  // and open the camera instead. A click is always a valid iOS user gesture.
+  document.addEventListener('click', function(e) {
+    if (!qcArmed) return;
+    if (!e.target || !e.target.closest || !e.target.closest('#tab-btn-catch')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    disarm();
+    catchResetForm();  // fresh state for this catch
     // Position NOW — where the fish was caught, not where the boat drifts to
     // while photos are being taken.
     catchGetGps();
-    // Synchronous .click() inside the pointerup handler: iOS honors a
-    // programmatic file-input open only in an unbroken user-gesture chain.
     fishInput.click();
-  });
+  }, true);
 
   fishInput.addEventListener('change', function() {
     var f = fishInput.files && fishInput.files[0];
