@@ -21,6 +21,7 @@ import io
 import json
 import base64
 import logging
+import secrets
 import threading
 import glob as globmod
 import sqlite3
@@ -445,6 +446,33 @@ def _record_photo_owner(filename, username):
         logger.warning(f'photo owner record failed: {e}')
 
 
+def _ensure_shortcut_tokens_table():
+    """Per-user tokens for the Siri Shortcut endpoint. A token authorizes
+    catch-logging as its owner and nothing else."""
+    with sqlite3.connect(DB_PATH, timeout=15) as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS shortcut_tokens (
+            username TEXT PRIMARY KEY,
+            token TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        db.commit()
+
+
+def _shortcut_token_owner(token):
+    """Username owning this Shortcut token, or None."""
+    if not token or len(token) < 16 or len(token) > 128:
+        return None
+    try:
+        with sqlite3.connect(DB_PATH, timeout=15) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute('SELECT username FROM shortcut_tokens WHERE token = ?',
+                             (token,)).fetchone()
+            return row['username'] if row else None
+    except Exception as e:
+        logger.warning(f'shortcut token lookup failed: {e}')
+        return None
+
+
 def _find_catch_by_client_id(client_id, max_files=400):
     """Scan recent catch JSONs for a matching client_id (idempotency token sent
     by the app, stable across retries of the same catch). Bounded and cheap —
@@ -568,6 +596,55 @@ def register_photo_catch_routes(app, login_required):
     from flask import request, jsonify, session, send_from_directory
 
     _ensure_posts_table()
+    _ensure_shortcut_tokens_table()
+
+    @app.route('/api/shortcut-token', methods=['GET', 'POST'])
+    @login_required
+    def shortcut_token():
+        """Get (or create on first ask) the caller's Siri Shortcut token."""
+        username = session.get('username', '')
+        if not username:
+            return jsonify({'error': 'Not authenticated'}), 401
+        try:
+            with sqlite3.connect(DB_PATH, timeout=15) as db:
+                db.row_factory = sqlite3.Row
+                if request.method == 'POST':  # explicit regenerate
+                    token = secrets.token_urlsafe(24)
+                    db.execute('INSERT OR REPLACE INTO shortcut_tokens (username, token) '
+                               'VALUES (?, ?)', (username, token))
+                    db.commit()
+                else:
+                    row = db.execute('SELECT token FROM shortcut_tokens WHERE username = ?',
+                                     (username,)).fetchone()
+                    if row:
+                        token = row['token']
+                    else:
+                        token = secrets.token_urlsafe(24)
+                        db.execute('INSERT INTO shortcut_tokens (username, token) VALUES (?, ?)',
+                                   (username, token))
+                        db.commit()
+        except Exception as e:
+            logger.error(f'shortcut token get/create failed: {e}')
+            return jsonify({'error': 'Could not issue token'}), 500
+        return jsonify({'token': token, 'endpoint': '/api/shortcut/log-catch',
+                        'header': 'X-Catch-Token'})
+
+    @app.route('/api/shortcut/log-catch', methods=['POST'])
+    def shortcut_log_catch():
+        """Siri Shortcut entry point: token auth instead of a login session.
+        Delegates to the normal save path so EVERY behavior is identical —
+        EXIF time, background sonar read + conditions, crew notifications,
+        duplicate guard. The token authorizes catch-logging only."""
+        token = (request.headers.get('X-Catch-Token') or
+                 request.form.get('token') or '').strip()
+        username = _shortcut_token_owner(token)
+        if not username:
+            return jsonify({'error': 'Invalid or missing token'}), 401
+        # Authenticate this request only, then reuse the session-based route.
+        session['user_id'] = f'shortcut:{username}'
+        session['username'] = username
+        logger.info(f'Shortcut catch upload from {username}')
+        return log_catch_photo()
 
     @app.route('/parse-catch-photo', methods=['POST'])
     @login_required

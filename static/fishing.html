@@ -959,6 +959,10 @@ body.kb-open .advisor-fab { visibility: hidden; }
         <input type="checkbox" id="qc-enabled" checked onchange="qcToggleChanged(this)">
         <label for="qc-enabled">Quick Catch: hold the Log Catch tab to snap &amp; log in two taps</label>
       </div>
+      <div class="qc-toggle-row">
+        <button type="button" class="catch-chip" onclick="showSiriToken()">&#127908; Siri setup</button>
+        <span id="siri-token-out" style="user-select:text;-webkit-user-select:text;word-break:break-all;"></span>
+      </div>
     </div>
     <div class="catch-label">Spot</div>
     <div class="catch-chips" id="catch-spot-chips">
@@ -3757,6 +3761,22 @@ function qcEnabled() {
 }
 window.qcToggleChanged = function(cb) {
   try { localStorage.setItem('wh_quickcatch', cb.checked ? 'on' : 'off'); } catch (e) {}
+};
+
+// Siri Shortcut token: fetched on demand, shown selectable for copy into the
+// "Log Catch" Shortcut's X-Catch-Token header. GET returns the existing token
+// (creating one on first ask) — it never changes unless regenerated server-side.
+window.showSiriToken = function() {
+  var out = document.getElementById('siri-token-out');
+  if (!out) return;
+  out.textContent = 'Fetching…';
+  fetch('/api/shortcut-token')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { out.textContent = data.error; return; }
+      out.innerHTML = 'Token (copy into your Shortcut): <strong>' + data.token + '</strong>';
+    })
+    .catch(function() { out.textContent = 'Could not fetch token — try again.'; });
 };
 
 (function qcInit() {
