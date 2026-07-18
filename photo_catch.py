@@ -445,6 +445,29 @@ def _record_photo_owner(filename, username):
         logger.warning(f'photo owner record failed: {e}')
 
 
+def _find_catch_by_client_id(client_id, max_files=400):
+    """Scan recent catch JSONs for a matching client_id (idempotency token sent
+    by the app, stable across retries of the same catch). Bounded and cheap —
+    catch files are ~1KB. Returns the entry dict with '_path' set, or None."""
+    if not client_id:
+        return None
+    try:
+        paths = globmod.glob(os.path.join(LOGS_DIR, 'catch_*.json'))
+        paths.sort(key=os.path.getmtime, reverse=True)
+        for p in paths[:max_files]:
+            try:
+                with open(p) as f:
+                    entry = json.load(f)
+            except Exception:
+                continue
+            if entry.get('client_id') == client_id:
+                entry['_path'] = p
+                return entry
+    except Exception as e:
+        logger.warning(f'client_id scan failed: {e}')
+    return None
+
+
 def _merge_into_catch_file(log_path, updates):
     """Atomically merge keys into an already-saved catch JSON. The catch may have
     been edited or deleted while the background work ran — re-read it fresh and
@@ -589,6 +612,23 @@ def register_photo_catch_routes(app, login_required):
     @login_required
     def log_catch_photo():
         """Save a catch with a photo. Multipart form: photo + JSON fields."""
+        # Idempotency: retries (manual re-tap or the phone's offline/failure queue)
+        # carry the same client_id as the original attempt. If that catch already
+        # made it to disk, acknowledge it instead of logging the fish twice.
+        client_id = (request.form.get('client_id') or '').strip()[:64]
+        if client_id:
+            existing = _find_catch_by_client_id(client_id)
+            if existing is not None:
+                logger.info(f'Duplicate save ignored (client_id={client_id}): '
+                            f'{os.path.basename(existing["_path"])}')
+                return jsonify({
+                    'saved': True,
+                    'duplicate': True,
+                    'filename': os.path.basename(existing['_path']),
+                    'photo_filename': existing.get('photo_filename'),
+                    'area_name': existing.get('area_name'),
+                })
+
         photo = request.files.get('photo')
         if not photo:
             return jsonify({'error': 'Photo required'}), 400
@@ -709,6 +749,7 @@ def register_photo_catch_routes(app, login_required):
             'size_confidence': size_confidence,
             'source': 'photo',
             'gps_source': gps_source,
+            'client_id': client_id or None,
         }
 
         log_filename = f'catch_{ts}.json'

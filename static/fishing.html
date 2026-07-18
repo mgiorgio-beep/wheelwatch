@@ -3042,6 +3042,8 @@ var catchPhotoFile = null;
 var catchPhotoExifGps = null;  // {lat, lon} read client-side from the picked file
 var catchPhotoExifTime = null;  // ISO local string from EXIF DateTimeOriginal, if present
 var catchInstrumentFile = null;  // optional Garmin/sonar screen — read for values, never shared
+var catchClientId = null;  // idempotency token: stable across retries of the SAME catch,
+                           // so a re-send (manual or queue drain) can never double-log it
 
 window.catchInstrumentPicked = function(evt) {
   var f = evt.target.files && evt.target.files[0];
@@ -3379,6 +3381,7 @@ function catchResetForm() {
   document.getElementById('catch-save-btn').textContent = 'Log Catch';
   catchGps = null;
   catchGpsSource = null;
+  catchClientId = null;  // next catch gets a fresh idempotency token
   catchPhotoClear();
   catchSetGpsDot('', 'GPS: locating');
   document.querySelectorAll('.catch-chip').forEach(function(c) { c.classList.remove('selected'); });
@@ -3446,8 +3449,15 @@ window.catchSave = function() {
   var onErr = function() { btn.textContent = 'Error -- Try Again'; btn.disabled = false; };
 
   if (catchPhotoFile) {
+    // One id per catch, stable across retries — the server uses it to recognize
+    // a re-send of a catch it already saved and refuses to log the fish twice.
+    if (!catchClientId) {
+      catchClientId = 'c-' + Date.now().toString(36) + '-' +
+        Math.random().toString(36).slice(2, 10);
+    }
     var fd = new FormData();
     fd.append('photo', catchPhotoFile);
+    fd.append('client_id', catchClientId);
     fd.append('spot', spot);
     fd.append('species', document.getElementById('catch-species').value);
     fd.append('technique', document.getElementById('catch-technique').value);
@@ -3461,11 +3471,14 @@ window.catchSave = function() {
     if (catchPhotoFile._wh_size_confidence) fd.append('size_confidence', catchPhotoFile._wh_size_confidence);
     if (catchInstrumentFile) fd.append('instrument_photo', catchInstrumentFile);
 
-    // Offline path: stash the catch in IndexedDB and sync when signal returns.
-    var queueThisCatch = function() {
+    // Stash path: park the catch in IndexedDB (survives the app closing) and
+    // sync when possible. Used when offline AND when the server fails a save —
+    // a catch that made it to Save must never live only in page memory.
+    var queueThisCatch = function(reason) {
       var rec = {
         queued_at: catchQueueLocalIso(),
         fields: {
+          client_id: catchClientId,
           spot: spot,
           species: document.getElementById('catch-species').value,
           technique: document.getElementById('catch-technique').value,
@@ -3482,10 +3495,13 @@ window.catchSave = function() {
       if (catchPhotoFile._wh_species_confidence) rec.fields.species_confidence = catchPhotoFile._wh_species_confidence;
       if (catchPhotoFile._wh_size_confidence) rec.fields.size_confidence = catchPhotoFile._wh_size_confidence;
       catchQueueAdd(rec).then(function() {
-        btn.textContent = 'Saved Offline'; btn.style.background = 'var(--green)';
+        btn.textContent = reason === 'server' ? 'Saved to Phone' : 'Saved Offline';
+        btn.style.background = 'var(--green)';
         var toast = document.getElementById('catch-success-toast');
         if (toast) {
-          toast.textContent = "Saved offline — will sync when you're back in range";
+          toast.textContent = reason === 'server'
+            ? 'Saved to your phone — the server hiccuped, will retry automatically'
+            : "Saved offline — will sync when you're back in range";
           toast.style.display = 'block';
           setTimeout(function() { toast.style.display = 'none'; }, 4000);
         }
@@ -3500,10 +3516,19 @@ window.catchSave = function() {
     if (!navigator.onLine) { queueThisCatch(); return; }
     fetch('/log-catch-photo', { method: 'POST', body: fd })
       .then(function(r) {
-        // HTTP responses (even errors) mean the server was reached — never queue those.
-        return r.json()
-          .catch(function() { return { error: 'HTTP ' + r.status }; })
-          .then(function(data) { if (data.error) onErr(); else onOk(); });
+        return r.json().then(
+          function(data) { return { status: r.status, data: data }; },
+          function() { return { status: r.status, data: null }; });
+      })
+      .then(function(res) {
+        if (res.data && !res.data.error) { onOk(); return; }
+        // 4xx = THIS upload is invalid (too large, missing photo) — retrying the
+        // same bytes can't succeed, so surface the error instead of queueing.
+        if (res.status >= 400 && res.status < 500) { onErr(); return; }
+        // 5xx, a killed worker, or a non-JSON body (login page, gateway error
+        // page) = server-side trouble. Stash the catch so it can't be lost;
+        // the queue retries it and client_id makes retries duplicate-safe.
+        queueThisCatch('server');
       })
       .catch(function() { queueThisCatch(); });  // fetch rejected = network failure
     return;
@@ -3632,8 +3657,16 @@ window.syncCatchQueue = function() {
           return catchQueueDelete(item.key).then(next);
         }
         if (!r.ok) throw new Error('HTTP ' + r.status);  // 5xx: keep record, stop draining
-        syncedAny = true;
-        return catchQueueDelete(item.key).then(next);
+        // Only delete on a CONFIRMED save. A logged-out session gets the login
+        // page back with status 200 — deleting on that would silently lose the
+        // catch. Non-JSON or app-level error: keep the record for next drain.
+        return r.json().then(
+          function(data) {
+            if (data && data.error) throw new Error(data.error);
+            syncedAny = true;
+            return catchQueueDelete(item.key).then(next);
+          },
+          function() { throw new Error('unconfirmed save (non-JSON response)'); });
       });
     }
     return next();
