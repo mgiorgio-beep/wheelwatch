@@ -21,6 +21,7 @@ import io
 import json
 import base64
 import logging
+import threading
 import glob as globmod
 import sqlite3
 from datetime import datetime, timedelta
@@ -196,7 +197,10 @@ def _parse_photo_with_claude(image_bytes, media_type='image/jpeg'):
     if not api_key:
         raise RuntimeError('ANTHROPIC_API_KEY not configured')
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # Hard client timeout: this runs inside the /parse-catch-photo request, which
+    # must finish inside gunicorn's 60s worker budget. One attempt, no retries —
+    # a retried 45s call would blow the budget and get the worker killed.
+    client = anthropic.Anthropic(api_key=api_key, timeout=45.0, max_retries=0)
     img_b64 = base64.standard_b64encode(image_bytes).decode('ascii')
 
     response = client.messages.create(
@@ -279,7 +283,9 @@ def _parse_instrument_with_claude(image_bytes, media_type='image/jpeg'):
     if not api_key:
         raise RuntimeError('ANTHROPIC_API_KEY not configured')
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # Runs in the post-save background thread, so no gunicorn deadline — but cap
+    # it anyway so a hung API call can't pin a thread until the next deploy.
+    client = anthropic.Anthropic(api_key=api_key, timeout=60.0, max_retries=1)
     img_b64 = base64.standard_b64encode(image_bytes).decode('ascii')
 
     response = client.messages.create(
@@ -439,6 +445,87 @@ def _record_photo_owner(filename, username):
         logger.warning(f'photo owner record failed: {e}')
 
 
+def _merge_into_catch_file(log_path, updates):
+    """Atomically merge keys into an already-saved catch JSON. The catch may have
+    been edited or deleted while the background work ran — re-read it fresh and
+    touch only the keys we own. Returns True on success."""
+    try:
+        with open(log_path) as f:
+            entry = json.load(f)
+    except FileNotFoundError:
+        logger.info(f'catch enrich skipped — {os.path.basename(log_path)} was deleted')
+        return False
+    except Exception as e:
+        logger.warning(f'catch enrich read failed for {log_path}: {e}')
+        return False
+    entry.update(updates)
+    tmp_path = log_path + '.tmp'
+    try:
+        with open(tmp_path, 'w') as f:
+            json.dump(entry, f, indent=2)
+        os.replace(tmp_path, log_path)  # atomic — feed readers never see a torn file
+        return True
+    except Exception as e:
+        logger.warning(f'catch enrich write failed for {log_path}: {e}')
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        return False
+
+
+def _enrich_catch_async(log_path, instr_bytes, instr_media_type,
+                        lat, lon, catch_dt, username, user_spot):
+    """Post-save enrichment, run in a daemon thread AFTER /log-catch-photo has
+    responded. Does the two slow jobs that used to run inside the request and
+    could blow gunicorn's 60s worker timeout when a sonar photo was attached
+    (killing the worker and losing the catch):
+      1. Claude Vision read of the Garmin/instrument photo (20-40s)
+      2. conditions snapshot (live ERDDAP/buoy/tide fetches on a fresh catch —
+         the ERDDAP request timeout alone is 60s)
+    Results are merged into the already-saved catch file. Any failure here just
+    leaves the catch without those fields — it can never lose the catch."""
+    instrument = None
+    if instr_bytes:
+        try:
+            instrument = _parse_instrument_with_claude(
+                instr_bytes, media_type=instr_media_type)
+            logger.info(f'Instrument extract for {username}: {instrument}')
+        except Exception as e:
+            logger.warning(f'Instrument photo parse skipped: {e}')
+
+    updates = {}
+    garmin_temp = instrument.get('water_temp_f') if instrument else None
+    garmin_depth = instrument.get('depth_ft') if instrument else None
+    if instrument and instrument.get('lat') is not None and instrument.get('lon') is not None:
+        # GPS read off the chartplotter wins over browser/EXIF fixes.
+        lat, lon = instrument['lat'], instrument['lon']
+        updates['gps'] = {'lat': lat, 'lon': lon}
+        updates['gps_source'] = 'instrument'
+        area = coords_to_area_name(lat, lon)
+        if area:
+            updates['area_name'] = area
+            if not user_spot:
+                # Spot was auto-derived from GPS at save time — keep it in step
+                # with the better fix. A captain-typed spot is never touched.
+                updates['spot'] = area
+    if instrument:
+        updates['instrument'] = instrument
+
+    try:
+        from conditions import build_conditions_snapshot
+        conditions = build_conditions_snapshot(
+            lat=lat, lon=lon, depth_ft=garmin_depth, water_temp_f=garmin_temp,
+            at=catch_dt)
+        if conditions:
+            updates['conditions'] = conditions
+    except Exception as e:
+        logger.warning(f'Conditions snapshot skipped: {e}')
+
+    if updates:
+        _merge_into_catch_file(log_path, updates)
+
+
 def _photo_owner(filename):
     try:
         with sqlite3.connect(DB_PATH, timeout=15) as db:
@@ -573,46 +660,34 @@ def register_photo_catch_routes(app, login_required):
             return jsonify({'error': 'Could not save photo'}), 500
         _record_photo_owner(photo_filename, username)
 
-        # Optional Garmin/instrument photo: extract numeric values, then DISCARD or
-        # store ONLY in the private instrument dir. It must NEVER reach the posts
-        # table or any feed photo directory.
-        instrument = None
+        # Optional Garmin/instrument photo: store it in the private instrument dir
+        # now (fast, resized, EXIF-stripped — never served to the feed). The Claude
+        # read of it is SLOW (20-40s) and runs after the response, in
+        # _enrich_catch_async — doing it inline used to blow gunicorn's 60s worker
+        # timeout and lose the whole catch.
+        instr_bytes = None
+        instr_media_type = 'image/jpeg'
         instr_file = request.files.get('instrument_photo')
         if instr_file:
             try:
-                instr_bytes = instr_file.read()
-                if instr_bytes and len(instr_bytes) <= 15 * 1024 * 1024:
-                    media_type = instr_file.mimetype if instr_file.mimetype in (
-                        'image/jpeg', 'image/png', 'image/gif', 'image/webp') else 'image/jpeg'
-                    instrument = _parse_instrument_with_claude(instr_bytes, media_type=media_type)
-                    # Store privately (resized, EXIF-stripped) for audit — never served.
+                raw_instr = instr_file.read()
+                if raw_instr and len(raw_instr) <= 15 * 1024 * 1024:
+                    instr_bytes = raw_instr
+                    if instr_file.mimetype in (
+                            'image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+                        instr_media_type = instr_file.mimetype
                     try:
                         instr_name = f'instrument_{safe_user}_{ts}.jpg'
                         _resize_and_save(instr_bytes, os.path.join(INSTRUMENT_DIR, instr_name))
                         _record_photo_owner(instr_name, username)
                     except Exception as e:
                         logger.warning(f'Instrument photo store skipped: {e}')
-                    logger.info(f'Instrument extract for {username}: {instrument}')
             except Exception as e:
-                logger.warning(f'Instrument photo parse skipped: {e}')
+                logger.warning(f'Instrument photo read skipped: {e}')
 
-        # Garmin values override computed conditions; GPS from the instrument wins.
-        garmin_temp = instrument.get('water_temp_f') if instrument else None
-        garmin_depth = instrument.get('depth_ft') if instrument else None
-        if instrument and instrument.get('lat') is not None and instrument.get('lon') is not None:
-            lat, lon = instrument['lat'], instrument['lon']
-            gps = {'lat': lat, 'lon': lon}
-            gps_source = 'instrument'
-
-        # Snapshot canonical numeric conditions via the shared helper.
+        # Conditions + instrument values are filled in by _enrich_catch_async after
+        # the response goes out; the entry is saved immediately with what we have.
         conditions = {}
-        try:
-            from conditions import build_conditions_snapshot
-            conditions = build_conditions_snapshot(
-                lat=lat, lon=lon, depth_ft=garmin_depth, water_temp_f=garmin_temp,
-                at=catch_dt)
-        except Exception as e:
-            logger.warning(f'Conditions snapshot skipped: {e}')
 
         area_name = coords_to_area_name(lat, lon)
 
@@ -635,15 +710,26 @@ def register_photo_catch_routes(app, login_required):
             'source': 'photo',
             'gps_source': gps_source,
         }
-        if instrument:
-            entry['instrument'] = instrument
 
         log_filename = f'catch_{ts}.json'
         log_path = os.path.join(LOGS_DIR, log_filename)
-        with open(log_path, 'w') as f:
-            json.dump(entry, f, indent=2)
+        try:
+            with open(log_path, 'w') as f:
+                json.dump(entry, f, indent=2)
+        except Exception as e:
+            logger.error(f'Catch log write failed: {e}')
+            return jsonify({'error': 'Could not save catch'}), 500
         logger.info(f'Photo catch logged by {username}: {species or "?"} '
                     f'{size_inches or "?"}in @ {area_name or "no-gps"}')
+
+        # Kick off the slow enrichment (sonar-photo Claude read + live conditions
+        # fetches) in the background — the catch is already safe on disk.
+        threading.Thread(
+            target=_enrich_catch_async,
+            args=(log_path, instr_bytes, instr_media_type, lat, lon, catch_dt,
+                  username, spot),
+            daemon=True,
+        ).start()
 
         # Crew notifications (DB insert — mirrors captain_advisor flow)
         try:
