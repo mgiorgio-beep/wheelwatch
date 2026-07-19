@@ -35,6 +35,17 @@ name is the Siri phrase):
 Say **"Hey Siri, log catch"** to run it. Add it to the Home Screen or an
 Action-Button/Back-Tap binding for a no-voice trigger too.
 
+## Troubleshooting
+
+- **413 Request Entity Too Large**: nginx on the Beelink is missing
+  `client_max_body_size 25m;` in the `http {}` block of `/etc/nginx/nginx.conf`
+  (its 1MB default blocks full-resolution Shortcut uploads). Re-add it, then
+  `sudo nginx -t && sudo systemctl reload nginx`. See the App Improvements
+  Brief §1.4 for all Beelink-only config that lives outside this repo.
+- **Garmin values missing from a catch**: check the Shortcut's second form
+  field — key must be exactly `instrument_photo` with the GarminPhoto variable
+  attached; Shortcuts silently drops a File field with no value.
+
 ## Notes
 
 - Skipping the Garmin: just cancel the second camera — the POST still works

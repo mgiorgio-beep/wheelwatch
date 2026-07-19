@@ -34,6 +34,11 @@ Draining the queue previously deleted a record on any 2xx response. A logged-out
 
 gunicorn moved to explicit threaded workers (`-w 2 --threads 8 --worker-class gthread --timeout 90`) via a systemd drop-in, so stalled external feeds (NOAA outages) can't pin the whole app.
 
+**⚠️ Beelink-only config (not in this repo — re-apply if the server is ever rebuilt):**
+
+- systemd drop-in: `/etc/systemd/system/wheelhouse.service.d/override.conf` (the gunicorn line above).
+- nginx upload limit: `client_max_body_size 25m;` added inside the `http {}` block of `/etc/nginx/nginx.conf` (2026-07-19). nginx's 1MB default rejected Siri Shortcut uploads with **413 Request Entity Too Large** — the web app never hit it because it compresses photos client-side, but the Shortcut sends full-resolution camera photos. If Shortcut logging ever starts 413ing again, this setting is missing.
+
 ## 1.5 Remaining / feeds into Project 2
 
 - **Draft persistence at capture time:** photos should be written to the IndexedDB stash as soon as they're captured (on the file input's `change` event), not only when Save is tapped — so a backgrounded or recycled page mid-flow can't lose an already-taken photo. This is a Quick Catch requirement (§6 of Project 2) but is equally valuable in the classic flow.
