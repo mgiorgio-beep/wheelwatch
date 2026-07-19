@@ -425,6 +425,30 @@ body.kb-open .advisor-fab { visibility: hidden; }
   display: flex; align-items: center; justify-content: center;
   touch-action: none;
 }
+.advisor-attach-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg-elevated); border: none; color: var(--text-secondary);
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.advisor-attach-btn.has-img { color: var(--accent); }
+.advisor-img-preview {
+  display: flex; align-items: center; gap: 10px; padding: 0 0 8px;
+}
+.advisor-img-preview img {
+  width: 44px; height: 44px; object-fit: cover; border-radius: 8px;
+  border: 0.5px solid var(--border-light);
+}
+.advisor-img-preview .advisor-img-remove {
+  background: var(--bg-elevated); border: none; color: var(--text-secondary);
+  width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
+  font-size: 14px; line-height: 1; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.advisor-msg-bubble img.advisor-attached-img {
+  display: block; max-width: 180px; max-height: 180px;
+  border-radius: 10px; margin-bottom: 6px;
+}
 
 /* ==================== CATCH FORM (inline in tab) ==================== */
 .catch-section-title {
@@ -1211,7 +1235,7 @@ body.kb-open .advisor-fab { visibility: hidden; }
     <div class="advisor-welcome" id="advisor-welcome">
       <div class="advisor-welcome-icon"><svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/></svg></div>
       <div class="advisor-welcome-title">Your Captain's Advisor</div>
-      <div class="advisor-welcome-text">Tell me when you're heading out and I'll build a game plan using live tides, currents, weather, and SST.</div>
+      <div class="advisor-welcome-text">Tell me when you're heading out and I'll build a game plan using live tides, currents, weather, and SST. You can also snap a photo of your fishfinder screen with the camera button and I'll read it.</div>
       <div class="advisor-starters">
         <button class="advisor-starter" onclick="advisorQuick('Leaving Ryder\'s Cove tomorrow at first light')">Leaving Ryder's Cove at first light</button>
         <button class="advisor-starter" onclick="advisorQuick('What do conditions look like this weekend?')">Conditions this weekend?</button>
@@ -1220,7 +1244,16 @@ body.kb-open .advisor-fab { visibility: hidden; }
     </div>
   </div>
   <div class="advisor-input-area">
+    <div class="advisor-img-preview" id="advisor-img-preview" style="display:none;">
+      <img id="advisor-img-thumb" alt="Attached photo">
+      <span style="font-size:11px;color:var(--text-muted);flex:1;">Photo attached — sonar screens, catches, bird piles all work</span>
+      <button class="advisor-img-remove" onclick="advisorClearImage()" aria-label="Remove photo">&times;</button>
+    </div>
     <div class="advisor-input-row">
+      <input type="file" id="advisor-file" accept="image/*" style="display:none;">
+      <button id="advisor-attach-btn" class="advisor-attach-btn" onclick="document.getElementById('advisor-file').click()" aria-label="Attach photo">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </button>
       <button id="advisor-voice-btn" class="advisor-voice-btn"
         ontouchstart="advisorVoiceStart(event)" ontouchend="advisorVoiceStop()"
         onmousedown="advisorVoiceStart(event)" onmouseup="advisorVoiceStop()">
@@ -2492,6 +2525,47 @@ var advisorHistory = [];
 var advisorBusy = false;
 var advisorOpen = false;
 var advisorGps = null;
+var advisorImage = null; // data URL of pending photo, resized client-side
+
+// --- Photo attach: resize on-device so a 12MP HEIC->JPEG doesn't get shipped
+// over boat LTE. 1280px longest side is plenty for reading a Garmin screen.
+function advisorResizeImage(file, cb) {
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function() {
+    var maxSide = 1280;
+    var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    cb(canvas.toDataURL('image/jpeg', 0.85));
+  };
+  img.onerror = function() { URL.revokeObjectURL(url); cb(null); };
+  img.src = url;
+}
+
+document.getElementById('advisor-file').addEventListener('change', function() {
+  var f = this.files && this.files[0];
+  this.value = ''; // allow re-picking the same file
+  if (!f) return;
+  advisorResizeImage(f, function(dataUrl) {
+    if (!dataUrl) { alert("Couldn't read that photo — try another."); return; }
+    advisorImage = dataUrl;
+    document.getElementById('advisor-img-thumb').src = dataUrl;
+    document.getElementById('advisor-img-preview').style.display = 'flex';
+    document.getElementById('advisor-attach-btn').classList.add('has-img');
+    if (!advisorOpen) advisorToggle();
+    document.getElementById('advisor-input').focus();
+  });
+});
+
+window.advisorClearImage = function() {
+  advisorImage = null;
+  document.getElementById('advisor-img-preview').style.display = 'none';
+  document.getElementById('advisor-attach-btn').classList.remove('has-img');
+};
 
 if (navigator.geolocation) {
   navigator.geolocation.watchPosition(
@@ -2523,7 +2597,7 @@ window.advisorNewChat = function() {
   w.id = 'advisor-welcome';
   w.innerHTML = '<div class="advisor-welcome-icon"><svg width="32" height="32" fill="var(--accent)" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5"/><path d="M3 12h18M12 3c2.5 3 4 6.5 4 9s-1.5 6-4 9c-2.5-3-4-6.5-4-9s1.5-6 4-9z" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg></div>' +
     '<div class="advisor-welcome-title">Captain\'s Advisor</div>' +
-    '<div class="advisor-welcome-text">Tell me when you\'re heading out and I\'ll build a game plan using live tides, currents, weather, and SST.</div>' +
+    '<div class="advisor-welcome-text">Tell me when you\'re heading out and I\'ll build a game plan using live tides, currents, weather, and SST. You can also snap a photo of your fishfinder screen with the camera button and I\'ll read it.</div>' +
     '<div class="advisor-starters">' +
     '<button class="advisor-starter" onclick="advisorQuick(\'Leaving Ryder\\\'s Cove tomorrow at first light\')">Leaving Ryder\'s Cove at first light</button>' +
     '<button class="advisor-starter" onclick="advisorQuick(\'What do conditions look like this weekend?\')">Conditions this weekend?</button>' +
@@ -2552,7 +2626,7 @@ function advisorMd(text) {
   return '<p>' + s + '</p>';
 }
 
-function advisorAddMsg(role, text) {
+function advisorAddMsg(role, text, imgSrc) {
   var chat = document.getElementById('advisor-chat');
   if (!chat) return;
   var welcome = document.getElementById('advisor-welcome');
@@ -2567,7 +2641,14 @@ function advisorAddMsg(role, text) {
 
   var bubble = document.createElement('div');
   bubble.className = 'advisor-msg-bubble';
-  if (role === 'assistant') { bubble.innerHTML = advisorMd(text); } else { bubble.textContent = text; }
+  if (imgSrc) {
+    var im = document.createElement('img');
+    im.className = 'advisor-attached-img';
+    im.src = imgSrc;
+    bubble.appendChild(im);
+  }
+  if (role === 'assistant') { bubble.innerHTML = advisorMd(text); }
+  else if (text) { bubble.appendChild(document.createTextNode(text)); }
 
   wrapper.appendChild(label);
   wrapper.appendChild(bubble);
@@ -2606,23 +2687,29 @@ window.advisorSend = function() {
   if (advisorBusy) return;
   var input = document.getElementById('advisor-input');
   var msg = input.value.trim();
-  if (!msg) return;
+  var img = advisorImage;
+  if (!msg && !img) return;
+  if (!msg && img) msg = "What am I looking at here, and what's the move?";
   input.value = ''; advisorResize();
+  if (img) advisorClearImage();
 
   if (!advisorOpen) advisorToggle();
 
-  advisorAddMsg('user', msg);
+  advisorAddMsg('user', msg, img);
   advisorAddLoading();
   advisorBusy = true;
   document.getElementById('advisor-send-btn').disabled = true;
 
+  var body = {
+    message: msg + (advisorGps ? '\n[Current GPS: ' + advisorGps.lat.toFixed(4) + ', ' + advisorGps.lon.toFixed(4) + ']' : ''),
+    history: advisorHistory
+  };
+  if (img) body.image = img;
+
   whFetch('/api/fishing/advisor', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      message: msg + (advisorGps ? '\n[Current GPS: ' + advisorGps.lat.toFixed(4) + ', ' + advisorGps.lon.toFixed(4) + ']' : ''),
-      history: advisorHistory
-    })
+    body: JSON.stringify(body)
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -2630,7 +2717,9 @@ window.advisorSend = function() {
     if (data.error) { advisorAddMsg('assistant', data.error); }
     else {
       advisorAddMsg('assistant', data.response);
-      advisorHistory.push({role:'user', content:msg});
+      // History is text-only — past photos aren't resent, a placeholder
+      // keeps follow-up questions coherent for the model.
+      advisorHistory.push({role:'user', content:msg + (img ? ' [photo attached]' : '')});
       advisorHistory.push({role:'assistant', content:data.response});
       if (advisorHistory.length > 20) advisorHistory = advisorHistory.slice(-16);
     }

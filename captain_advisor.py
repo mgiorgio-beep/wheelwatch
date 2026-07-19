@@ -23,6 +23,24 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 MODEL = 'claude-opus-4-8'
+# Model for advisor turns that include a photo. Defaults to the main advisor
+# model; point WH_ADVISOR_IMAGE_MODEL at a Sonnet-class model in .env if the
+# on-the-water photo turns feel too slow.
+IMAGE_MODEL = os.environ.get('WH_ADVISOR_IMAGE_MODEL', MODEL)
+
+# Appended to the system prompt only when the user attaches a photo.
+PHOTO_SYSTEM_ADDENDUM = """
+
+## PHOTO ATTACHED
+The captain attached a photo with this message — usually a fishfinder/chartplotter screen (Garmin etc.) or a catch.
+
+For instrument screens: read what's on it (depth, water temp, SOG, position, range/frequency if visible) and interpret the sonar picture — bait balls vs. individual arches vs. bottom-hugging marks vs. thermocline or clutter, and where in the water column the marks sit. Then combine that with the live conditions data you already have (tide stage, current, time of day) and give him the call: work this mark or keep moving, and how to fish it (depth to run jigs, drift vs. anchor, which way the bait will slide as the tide turns).
+
+Screen photos taken on a boat often have glare, reflections, or motion blur. If a number or a return is unreadable or ambiguous, say so plainly and give your best read with the caveat — never invent a value. You are a second opinion, not ground truth, and he knows his machine.
+
+For catch photos: ID the species and estimate size honestly.
+
+Keep it tight and practical — he's likely reading this on deck."""
 
 SYSTEM_PROMPT = """You are Wheelhouse — an expert AI fishing consultant for a charter boat captain operating out of Chatham, Massachusetts on Cape Cod. You have been given real-time oceanographic data and deep local knowledge.
 
@@ -373,11 +391,13 @@ def get_live_data_context():
     return "\n".join(ctx)
 
 
-def ask_advisor(messages, user_message):
+def ask_advisor(messages, user_message, image_b64=None, image_media_type='image/jpeg'):
     """
     Send a message to the Captain's Advisor.
     messages: list of prior conversation messages [{"role": "user"/"assistant", "content": "..."}]
     user_message: the new user message
+    image_b64: optional base64-encoded photo (fishfinder screen, catch, etc.)
+    image_media_type: media type of the photo (image/jpeg, image/png, image/webp)
     Returns: assistant response text
     """
     if not ANTHROPIC_API_KEY:
@@ -388,12 +408,30 @@ def ask_advisor(messages, user_message):
 
     # Build the system prompt with live data
     full_system = SYSTEM_PROMPT + "\n\n" + live_data
+    if image_b64:
+        full_system += PHOTO_SYSTEM_ADDENDUM
 
-    # Build messages array
+    # Build messages array. History is text-only (the client stores a
+    # "[photo attached]" placeholder for past image turns); only the new
+    # message can carry an image block.
     api_messages = []
     for m in messages:
         api_messages.append({"role": m["role"], "content": m["content"]})
-    api_messages.append({"role": "user", "content": user_message})
+    if image_b64:
+        user_content = [
+            {
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': image_media_type,
+                    'data': image_b64,
+                },
+            },
+            {'type': 'text', 'text': user_message or "What am I looking at here, and what's the move?"},
+        ]
+    else:
+        user_content = user_message
+    api_messages.append({"role": "user", "content": user_content})
 
     try:
         r = requests.post(
@@ -404,12 +442,13 @@ def ask_advisor(messages, user_message):
                 'anthropic-version': '2023-06-01',
             },
             json={
-                'model': MODEL,
+                'model': IMAGE_MODEL if image_b64 else MODEL,
                 'max_tokens': 2000,
                 'system': full_system,
                 'messages': api_messages,
             },
-            timeout=30,
+            # Image turns run longer than text turns.
+            timeout=60 if image_b64 else 30,
         )
         r.raise_for_status()
         data = r.json()
@@ -442,13 +481,39 @@ def register_advisor_routes(app, login_required):
     @login_required
     def api_fishing_advisor():
         data = request.get_json()
-        if not data or 'message' not in data:
+        if not data or (not data.get('message') and not data.get('image')):
             return jsonify({'error': 'No message provided'}), 400
 
         messages = data.get('history', [])
-        user_msg = data['message']
+        user_msg = data.get('message', '')
 
-        response = ask_advisor(messages, user_msg)
+        # Optional photo: either a data URL ("data:image/jpeg;base64,....")
+        # or raw base64 plus image_media_type.
+        image_b64 = None
+        image_media_type = 'image/jpeg'
+        img = data.get('image')
+        if img:
+            if not isinstance(img, str):
+                return jsonify({'error': 'Bad image payload'}), 400
+            if img.startswith('data:'):
+                try:
+                    header, image_b64 = img.split(',', 1)
+                    image_media_type = header.split(';')[0].split(':', 1)[1] or 'image/jpeg'
+                except (ValueError, IndexError):
+                    return jsonify({'error': 'Bad image data URL'}), 400
+            else:
+                image_b64 = img
+                image_media_type = data.get('image_media_type', 'image/jpeg')
+            if image_media_type not in ('image/jpeg', 'image/png', 'image/webp', 'image/gif'):
+                return jsonify({'error': f'Unsupported image type: {image_media_type}'}), 400
+            # ~7MB of base64 ≈ 5MB decoded; the client resizes to ~1280px so
+            # anything bigger than this is not a phone photo of a screen.
+            if len(image_b64) > 7_000_000:
+                return jsonify({'error': 'Image too large — try again'}), 413
+
+        response = ask_advisor(messages, user_msg,
+                               image_b64=image_b64,
+                               image_media_type=image_media_type)
         return jsonify({
             'response': response,
             'timestamp': datetime.now().isoformat(),

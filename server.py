@@ -494,13 +494,23 @@ def api_bot_advisor():
 
     data = request.get_json(silent=True) or {}
     user_message = data.get('message', '')
-    if not user_message:
+    image_b64 = data.get('image_b64')
+    if not user_message and not image_b64:
         return jsonify({'error': 'No message provided'}), 400
 
     messages = data.get('messages', [])
 
+    image_media_type = data.get('image_media_type', 'image/jpeg')
+    if image_b64:
+        if not isinstance(image_b64, str) or len(image_b64) > 7_000_000:
+            return jsonify({'error': 'Bad or oversized image'}), 400
+        if image_media_type not in ('image/jpeg', 'image/png', 'image/webp', 'image/gif'):
+            return jsonify({'error': 'Unsupported image type'}), 400
+
     from captain_advisor import ask_advisor
-    reply = ask_advisor(messages, user_message)
+    reply = ask_advisor(messages, user_message,
+                        image_b64=image_b64,
+                        image_media_type=image_media_type)
     return jsonify({'reply': reply})
 
 
