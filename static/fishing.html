@@ -959,9 +959,12 @@ body.kb-open .advisor-fab { visibility: hidden; }
         <input type="checkbox" id="qc-enabled" checked onchange="qcToggleChanged(this)">
         <label for="qc-enabled">Quick Catch: hold the Log Catch tab to snap &amp; log in two taps</label>
       </div>
-      <div class="qc-toggle-row">
+      <div class="qc-toggle-row" style="flex-wrap:wrap;">
         <button type="button" class="catch-chip" onclick="showSiriToken()">&#127908; Siri setup</button>
-        <span id="siri-token-out" style="user-select:text;-webkit-user-select:text;word-break:break-all;"></span>
+        <a class="catch-chip" style="text-decoration:none;display:inline-block;"
+           href="https://www.icloud.com/shortcuts/932c3d2875dd4c3295d4ded3fd844575"
+           target="_blank" rel="noopener">&#11015;&#65039; Get the Shortcut</a>
+        <span id="siri-token-out" style="user-select:text;-webkit-user-select:text;word-break:break-all;flex-basis:100%;"></span>
       </div>
     </div>
     <div class="catch-label">Spot</div>
@@ -3774,7 +3777,8 @@ window.showSiriToken = function() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { out.textContent = data.error; return; }
-      out.innerHTML = 'Token (copy into your Shortcut): <strong>' + data.token + '</strong>';
+      out.innerHTML = 'Your token &mdash; paste it into the Shortcut&rsquo;s <em>X-Catch-Token</em> header ' +
+        '(replacing PASTE-YOUR-TOKEN-HERE): <strong>' + data.token + '</strong>';
     })
     .catch(function() { out.textContent = 'Could not fetch token — try again.'; });
 };

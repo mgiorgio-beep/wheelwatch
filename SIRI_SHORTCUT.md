@@ -6,15 +6,27 @@ the Garmin, and the Shortcut posts everything straight to Wheelhouse — no web
 page involved. The catch goes through the normal pipeline: EXIF timestamp,
 background sonar read, conditions snapshot, crew notifications.
 
-## One-time setup (~3 minutes)
+## One-time setup (~1 minute, pre-built shortcut)
 
-**Get your token:** in Wheelhouse, open the Log Catch tab and tap **🎤 Siri
-setup**. Copy the token shown. Treat it like a password — it lets its holder
-log catches as you (and nothing else). Anyone on the crew can do this same
-setup with their own token.
+1. **Install the shortcut:** open
+   https://www.icloud.com/shortcuts/932c3d2875dd4c3295d4ded3fd844575
+   on your iPhone (also linked from the **⬇️ Get the Shortcut** button on the
+   Log Catch tab) and tap **Add Shortcut**.
+2. **Get your token:** in Wheelhouse, Log Catch tab → **🎤 Siri setup** →
+   copy the token. Treat it like a password — it lets its holder log catches
+   as you (and nothing else).
+3. **Paste it in:** open the shortcut in the Shortcuts app → Get Contents of
+   URL → Headers → replace `PASTE-YOUR-TOKEN-HERE` with your token.
+4. Run it once with ▶ to approve the permission prompts (choose **Always
+   Allow** for wheelhouse.rednun.com). Done — "Hey Siri, log catch".
 
-**Build the Shortcut** (Shortcuts app → + → rename it **"Log Catch"** — the
-name is the Siri phrase):
+The shared link contains a placeholder token, never a real one. If the
+shortcut is ever rebuilt from scratch, re-share a cleaned copy the same way
+and update the link above and in `static/fishing.html`.
+
+## Building it manually (reference — what the shared shortcut contains)
+
+(Shortcuts app → + → rename it **"Log Catch"** — the name is the Siri phrase):
 
 1. **Take Photo** — Show Camera Preview: On. *(the fish)*
 2. **Save to Photo Album** — input: Photo from step 1. *(permanent copy in your roll)*
