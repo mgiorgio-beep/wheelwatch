@@ -10,6 +10,9 @@ What it does:
   a photo         Sent to the advisor as an image (fishfinder screen, catch,
                   bird pile...). Add a caption to ask a specific question;
                   no caption asks "what am I looking at?"
+  a location pin  Sets your position for the rest of the conversation — the
+                  advisor gets it with every question, same as the app's GPS
+                  tag. Live-location updates keep it current. /reset clears it.
 
 Once linked, the chat also receives crew catch alerts and the 5AM briefing
 verdict (sent by push_notify.telegram_to_user from the web app / cron).
@@ -42,6 +45,7 @@ endpoint (X-Bot-Key auth), so it needs BOT_SECRET_KEY set in .env as well.
 """
 
 import os
+import re as _re
 import sys
 import time
 import json
@@ -68,6 +72,8 @@ API = f'https://api.telegram.org/bot{TOKEN}'
 
 # Per-chat rolling advisor history (in memory; resets on restart)
 _HISTORY = {}
+# Per-chat last known position from a shared location pin: chat_id -> (lat, lon)
+_GPS = {}
 
 
 def tg(method, **params):
@@ -76,11 +82,59 @@ def tg(method, **params):
     return r.json()
 
 
-def send(chat_id, text):
-    try:
-        tg('sendMessage', chat_id=chat_id, text=text)
-    except Exception as e:
-        logger.warning(f'send failed: {e}')
+def md_to_telegram_html(text):
+    """Convert the advisor's markdown to Telegram's small HTML subset.
+
+    Telegram HTML supports <b>/<i>/<code>/<pre> and requires &<> escaped
+    everywhere else. Headers become bold lines, bullets become •.
+    """
+    s = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    s = _re.sub(r'`([^`\n]+)`', r'<code>\1</code>', s)
+    s = _re.sub(r'^#{1,4} +(.+)$', r'<b>\1</b>', s, flags=_re.M)
+    s = _re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', s, flags=_re.S)
+    s = _re.sub(r'(?<![\w*])\*([^*\n]+)\*(?![\w*])', r'<i>\1</i>', s)
+    s = _re.sub(r'^[\-\*] +', '• ', s, flags=_re.M)
+    s = _re.sub(r'^-{3,}$', '———', s, flags=_re.M)
+    return s
+
+
+def _chunks(text, limit=3900):
+    """Split on newlines to stay under Telegram's 4096-char message cap."""
+    if len(text) <= limit:
+        return [text]
+    out, cur = [], ''
+    for line in text.split('\n'):
+        while len(line) > limit:  # single pathological line: hard-split
+            if cur:
+                out.append(cur)
+                cur = ''
+            out.append(line[:limit])
+            line = line[limit:]
+        if cur and len(cur) + len(line) + 1 > limit:
+            out.append(cur)
+            cur = line
+        else:
+            cur = cur + '\n' + line if cur else line
+    if cur:
+        out.append(cur)
+    return out
+
+
+def send(chat_id, text, fmt=False):
+    """Send a message. fmt=True renders advisor markdown as Telegram HTML,
+    falling back to plain text if Telegram rejects the markup."""
+    for part in _chunks(text):
+        try:
+            if fmt:
+                try:
+                    tg('sendMessage', chat_id=chat_id,
+                       text=md_to_telegram_html(part), parse_mode='HTML')
+                    continue
+                except Exception as e:
+                    logger.warning(f'HTML send failed, falling back to plain: {e}')
+            tg('sendMessage', chat_id=chat_id, text=part)
+        except Exception as e:
+            logger.warning(f'send failed: {e}')
 
 
 def username_for_chat(chat_id):
@@ -114,7 +168,11 @@ def unlink(chat_id):
 
 def ask_advisor(chat_id, text, image_b64=None, image_media_type='image/jpeg'):
     history = _HISTORY.get(chat_id, [])
-    payload = {'message': text, 'messages': history}
+    # Same GPS tag the app appends, sourced from the chat's last location pin.
+    # The tag rides on the outgoing message only — history stays clean.
+    gps = _GPS.get(chat_id)
+    out_text = text + (f'\n[Current GPS: {gps[0]:.4f}, {gps[1]:.4f}]' if gps else '')
+    payload = {'message': out_text, 'messages': history}
     if image_b64:
         payload['image_b64'] = image_b64
         payload['image_media_type'] = image_media_type
@@ -158,7 +216,9 @@ def handle(msg):
     chat_id = msg['chat']['id']
     text = (msg.get('text') or '').strip()
     has_photo = bool(msg.get('photo'))
-    if not text and not has_photo:
+    loc = msg.get('location')
+    has_loc = bool(loc and loc.get('latitude') is not None)
+    if not text and not has_photo and not has_loc:
         return
 
     if text.startswith('/start'):
@@ -189,7 +249,15 @@ def handle(msg):
 
     if text.lower() in ('/reset', 'reset'):
         _HISTORY.pop(chat_id, None)
-        send(chat_id, 'Conversation cleared.')
+        had_gps = _GPS.pop(chat_id, None)
+        send(chat_id, 'Conversation cleared.' + (' Position cleared too.' if had_gps else ''))
+        return
+
+    if has_loc:
+        _GPS[chat_id] = (loc['latitude'], loc['longitude'])
+        send(chat_id, f"Got your position ({loc['latitude']:.4f}, {loc['longitude']:.4f}) — "
+                      f"I'll pin every question to it until you send a new one or /reset. "
+                      f"Share a live location and I'll track you as you move.")
         return
 
     if has_photo:
@@ -201,10 +269,10 @@ def handle(msg):
             return
         question = (msg.get('caption') or '').strip() or \
             "What am I looking at here, and what's the move?"
-        send(chat_id, ask_advisor(chat_id, question, image_b64=img_b64))
+        send(chat_id, ask_advisor(chat_id, question, image_b64=img_b64), fmt=True)
         return
 
-    send(chat_id, ask_advisor(chat_id, text))
+    send(chat_id, ask_advisor(chat_id, text), fmt=True)
 
 
 def main():
@@ -223,6 +291,13 @@ def main():
                         handle(upd['message'])
                     except Exception as e:
                         logger.error(f'handle failed: {e}')
+                elif 'edited_message' in upd:
+                    # Live-location shares arrive as silent edits — keep the
+                    # chat's pinned position current, no reply.
+                    em = upd['edited_message']
+                    eloc = em.get('location')
+                    if eloc and eloc.get('latitude') is not None:
+                        _GPS[em['chat']['id']] = (eloc['latitude'], eloc['longitude'])
         except Exception as e:
             logger.warning(f'poll error: {e}')
             time.sleep(10)
