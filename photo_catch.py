@@ -1280,7 +1280,7 @@ def register_photo_catch_routes(app, login_required):
                 gps = entry.get('gps') or {}
                 area = entry.get('area_name') or coords_to_area_name(
                     gps.get('lat'), gps.get('lon')) or entry.get('spot') or ''
-                items.append({
+                item = {
                     'type': 'catch',
                     'sort_ts': ts,
                     'author': owner,
@@ -1290,7 +1290,12 @@ def register_photo_catch_routes(app, login_required):
                     'crew': user_group_name.get(owner, ''),
                     'photo_filename': entry.get('photo_filename'),
                     'time_ago': time_ago(ts),
-                })
+                }
+                if owner == username:
+                    # Own catches carry the log filename so the feed can offer
+                    # Delete (same endpoint as history's swipe-to-delete).
+                    item['filename'] = os.path.basename(fp)
+                items.append(item)
             except Exception as e:
                 logger.debug(f'Skipping catch file {fp}: {e}')
 

@@ -4095,6 +4095,20 @@ window.deletePost = function(id) {
     .then(function(d) { if (d.deleted) loadFeed(); });
 };
 
+window.deleteCatchFromFeed = function(filename) {
+  if (!confirm('Delete this catch? The photo comes off the feed and the server.')) return;
+  fetch('/api/fishing/log/' + encodeURIComponent(filename), { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.deleted) {
+        _catchLogs = [];  // keep history in sync with the server
+        loadFeed();
+        if (typeof loadCatchHistory === 'function' && activeTab === 'catch') loadCatchHistory();
+      }
+    })
+    .catch(function() {});
+};
+
 window.loadFeed = function() {
   var el = document.getElementById('feed-list');
   if (!el) return;
@@ -4143,8 +4157,13 @@ function renderFeedItem(it) {
     bodyHtml = '<div class="feed-card-body-text">' + feedEscHtml(it.body) + '</div>';
   }
 
-  var delBtn = (it.type === 'post' && it.is_self)
-    ? '<button class="feed-card-del" onclick="deletePost(' + it.id + ')">Delete</button>' : '';
+  var delBtn = '';
+  if (it.type === 'post' && it.is_self) {
+    delBtn = '<button class="feed-card-del" onclick="deletePost(' + it.id + ')">Delete</button>';
+  } else if (it.type === 'catch' && it.is_self && it.filename) {
+    delBtn = '<button class="feed-card-del" onclick="deleteCatchFromFeed(\'' +
+      feedEscHtml(it.filename).replace(/'/g, '') + '\')">Delete</button>';
+  }
 
   return '<div class="feed-card">' +
     photoHtml +

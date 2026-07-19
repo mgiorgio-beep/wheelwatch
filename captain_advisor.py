@@ -860,7 +860,25 @@ Rules:
             entry = json.load(f)
         if entry.get('logged_by') != flask_session.get('username'):
             return jsonify({'error': 'Not authorized'}), 403
+        photo_fn = os.path.basename(entry.get('photo_filename') or '')
         os.remove(filepath)
+        # A deleted catch must not leave its images behind: remove the catch
+        # photo, the private instrument screenshot, and their owner records.
+        try:
+            import sqlite3
+            from photo_catch import PHOTOS_DIR, INSTRUMENT_DIR, DB_PATH as _pc_db
+            if photo_fn:
+                instr_fn = photo_fn.replace('catch_', 'instrument_', 1)
+                for d, fn in ((PHOTOS_DIR, photo_fn), (INSTRUMENT_DIR, instr_fn)):
+                    p = os.path.join(d, fn)
+                    if os.path.exists(p):
+                        os.remove(p)
+                with sqlite3.connect(_pc_db, timeout=15) as _db:
+                    _db.execute('DELETE FROM photo_owners WHERE filename IN (?, ?)',
+                                (photo_fn, instr_fn))
+                    _db.commit()
+        except Exception as e:
+            logger.warning(f'Catch photo cleanup incomplete for {filename}: {e}')
         logger.info(f'Catch log deleted: {filename}')
         return jsonify({'deleted': True})
 
